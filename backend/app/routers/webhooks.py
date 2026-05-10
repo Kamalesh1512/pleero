@@ -94,7 +94,7 @@ async def handle_refund_created(
 
     logger.info(
         "webhook_received",
-        event="refunds/create",
+        topic="refunds/create",
         shop=shop_domain,
         refund_id=payload.id,
         order_id=payload.order_id,
@@ -254,7 +254,7 @@ async def handle_app_uninstalled(
 
     logger.info(
         "webhook_received",
-        event="app/uninstalled",
+        topic="app/uninstalled",
         shop=shop_domain,
     )
 

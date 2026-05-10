@@ -229,7 +229,7 @@ class TestWebhookEndpoint:
         # Mock HMAC verification
         with patch("app.routers.webhooks.verify_webhook_hmac", return_value=True):
             # Mock email sending
-            with patch("app.routers.webhooks.send_offer_email", new_callable=AsyncMock):
+            with patch("app.services.email.send_offer_email", new_callable=AsyncMock):
                 response = await client.post(
                     "/webhooks/refunds/create",
                     json=mock_refund_webhook_payload,
