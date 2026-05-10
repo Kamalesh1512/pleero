@@ -153,7 +153,7 @@ jobs:
           # Install all project dependencies
           uv pip install --system -e .
           # Install test dependencies
-          uv pip install --system pytest pytest-cov pytest-asyncio
+          uv pip install --system pytest pytest-cov pytest-asyncio aiosqlite
 
       - name: Run pytest with coverage
         working-directory: ./backend
