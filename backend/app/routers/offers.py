@@ -65,9 +65,7 @@ async def get_offer(
         HTTPException: 404 if offer not found, 410 if offer expired/used
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:
@@ -90,9 +88,7 @@ async def get_offer(
         )
 
     # Load merchant for branding
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == offer.merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -157,9 +153,7 @@ async def accept_offer(
         HTTPException: 404 if not found, 410 if expired, 500 if credit fails
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:
@@ -194,9 +188,7 @@ async def accept_offer(
         )
 
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == offer.merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -308,9 +300,7 @@ async def decline_offer(
         HTTPException: 404 if not found, 410 if already processed
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:

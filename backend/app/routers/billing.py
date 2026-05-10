@@ -43,9 +43,7 @@ async def activate_subscription(
         Confirmation URL to redirect merchant to
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -108,9 +106,7 @@ async def billing_callback(
     )
 
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:

@@ -34,9 +34,7 @@ async def get_shopify_client(
         Tuple of (client, shop_domain, access_token) or None if merchant not found
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:

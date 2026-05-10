@@ -36,9 +36,7 @@ async def create_subscription(
         Confirmation URL for merchant to approve charge, or None if failed
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -192,9 +190,7 @@ async def get_subscription_status(
         Subscription status (ACTIVE, TRIAL, CANCELLED, EXPIRED)
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -310,9 +306,7 @@ async def update_merchant_subscription(
     """
     try:
         # Load merchant
-        result = await db.execute(
-            select(Merchant).where(Merchant.id == merchant_id)
-        )
+        result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
         merchant = result.scalar_one_or_none()
 
         if not merchant:

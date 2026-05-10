@@ -142,18 +142,20 @@ async def send_offer_email(
             logger.warning(
                 "resend_not_configured",
                 offer_id=str(offer_id),
-                message="RESEND_API_KEY not set - email would be sent here in production"
+                message="RESEND_API_KEY not set - email would be sent here in production",
             )
             return True  # Don't fail the workflow
 
         # Load offer and merchant
-        result = await db.execute(
-            select(Offer).where(Offer.id == offer_id)
-        )
+        result = await db.execute(select(Offer).where(Offer.id == offer_id))
         offer = result.scalar_one_or_none()
 
         if not offer:
-            logger.error("send_offer_email_failed", reason="offer_not_found", offer_id=str(offer_id))
+            logger.error(
+                "send_offer_email_failed",
+                reason="offer_not_found",
+                offer_id=str(offer_id),
+            )
             return False
 
         result = await db.execute(
@@ -162,15 +164,21 @@ async def send_offer_email(
         merchant = result.scalar_one_or_none()
 
         if not merchant:
-            logger.error("send_offer_email_failed", reason="merchant_not_found", offer_id=str(offer_id))
+            logger.error(
+                "send_offer_email_failed",
+                reason="merchant_not_found",
+                offer_id=str(offer_id),
+            )
             return False
 
         # Build offer URLs
         offer_url = f"{settings.FRONTEND_URL}/offers/{offer.offer_token}"
-        decline_url = f"{settings.FRONTEND_URL}/offers/{offer.offer_token}?action=decline"
+        decline_url = (
+            f"{settings.FRONTEND_URL}/offers/{offer.offer_token}?action=decline"
+        )
 
         # Extract merchant name from shop domain
-        merchant_name = merchant.shop_domain.split('.')[0].replace('-', ' ').title()
+        merchant_name = merchant.shop_domain.split(".")[0].replace("-", " ").title()
 
         # Build email HTML
         html_content = build_offer_email_html(

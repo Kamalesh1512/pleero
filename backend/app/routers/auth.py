@@ -162,9 +162,7 @@ async def callback(
     encrypted_token = encrypt_token(access_token)
 
     # Check if merchant already exists
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if merchant:
