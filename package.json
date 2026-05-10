@@ -1,0 +1,17 @@
+{
+  "name": "pleero",
+  "version": "1.0.0",
+  "description": "Shopify app that converts refund requests into store credit offers",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "cd frontend && pnpm dev",
+    "build": "cd frontend && pnpm build",
+    "start": "cd frontend && pnpm start"
+  },
+  "keywords": ["shopify", "app", "refunds", "store-credit"],
+  "author": "Pleero",
+  "license": "UNLICENSED"
+}

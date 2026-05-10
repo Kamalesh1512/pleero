@@ -1,0 +1,67 @@
+# Pleero Production Caddyfile
+# Uses Cloudflare Origin Certificate for SSL
+# Place Cloudflare origin cert at: /data/origin-cert.pem
+# Place Cloudflare origin key at: /data/origin-key.pem
+
+api.pleero.app {
+    # Use Cloudflare Origin Certificate (NOT Let's Encrypt)
+    # This ensures proper SSL between Cloudflare and VPS
+    tls /data/origin-cert.pem /data/origin-key.pem
+
+    encode gzip
+
+    # Reverse proxy to FastAPI backend
+    reverse_proxy backend:8000 {
+        # Forward real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Health check
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+    }
+
+    # Access logging
+    log {
+        output file /data/access.log {
+            roll_size 100mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        format json
+    }
+
+    # Security headers
+    header {
+        # Prevent MIME sniffing
+        X-Content-Type-Options nosniff
+
+        # Prevent clickjacking (but allow Shopify embedding)
+        # Note: Shopify embedded apps need special frame handling
+        X-Frame-Options SAMEORIGIN
+
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+
+        # Referrer policy
+        Referrer-Policy strict-origin-when-cross-origin
+
+        # HSTS (force HTTPS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Hide server version
+        -Server
+    }
+
+    # Rate limiting (optional, can also be done at Cloudflare level)
+    # For webhook endpoints, we don't rate limit (Shopify needs reliable delivery)
+}
+
+# Health check endpoint for monitoring
+:8080 {
+    respond /health 200 {
+        body "OK"
+    }
+}

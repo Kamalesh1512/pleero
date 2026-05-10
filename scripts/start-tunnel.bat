@@ -1,0 +1,3 @@
+@echo off
+echo Starting Pleero Cloudflare Tunnel...
+cloudflared tunnel --config "C:\Users\KAMALESH M\.cloudflared\pleero-config.yml" run pleero-dev
