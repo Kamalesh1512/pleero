@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from httpx import AsyncClient
 
-from app.core.config import settings
 from app.models.base import Base
 from app.main import app
 from app.core.database import get_db
@@ -51,13 +50,13 @@ async def engine():
 @pytest_asyncio.fixture
 async def db_session(engine):
     """Create database session for tests."""
-    AsyncSessionLocal = sessionmaker(
+    async_session_local = sessionmaker(
         engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
 
-    async with AsyncSessionLocal() as session:
+    async with async_session_local() as session:
         yield session
 
 

@@ -8,7 +8,6 @@ import hashlib
 import base64
 from typing import Any
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.merchant import SubscriptionStatus
 

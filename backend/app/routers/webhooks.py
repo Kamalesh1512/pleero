@@ -3,8 +3,6 @@ Shopify webhook endpoints.
 Receives and processes webhook events from Shopify.
 """
 
-from datetime import datetime, UTC
-
 from fastapi import APIRouter, Request, HTTPException, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select

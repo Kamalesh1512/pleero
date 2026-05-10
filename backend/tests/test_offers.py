@@ -9,7 +9,6 @@ from datetime import datetime, UTC
 
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.models.offer import Offer, OfferStatus
-from app.models.offer_event import OfferEvent, EventType
 
 
 @pytest.mark.asyncio

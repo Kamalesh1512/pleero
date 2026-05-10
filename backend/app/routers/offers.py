@@ -282,7 +282,7 @@ async def accept_offer(
         raise HTTPException(
             status_code=500,
             detail="An error occurred while processing your request",
-        )
+        ) from None
 
 
 @router.post("/{offer_token}/decline")
