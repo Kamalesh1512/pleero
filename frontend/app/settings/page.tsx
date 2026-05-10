@@ -150,10 +150,10 @@ export default function Settings() {
 
                 <TextField
                   label="Brand Color"
-                  type="color"
                   value={brandColor}
                   onChange={setBrandColor}
-                  helpText="Primary button color in offer emails"
+                  placeholder="#000000"
+                  helpText="Hex color code for primary button in offer emails (e.g., #FF5733)"
                   autoComplete="off"
                 />
               </BlockStack>
