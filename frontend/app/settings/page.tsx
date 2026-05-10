@@ -11,13 +11,12 @@ import {
   Layout,
   TextField,
   RangeSlider,
-  Button,
   BlockStack,
   Text,
   Banner,
 } from '@shopify/polaris';
 import { useState, useCallback } from 'react';
-import { updateMerchantSettings, formatCurrency } from '@/lib/api';
+import { formatCurrency } from '@/lib/api';
 
 export default function Settings() {
   const [bonusPercentage, setBonusPercentage] = useState(10);
@@ -55,7 +54,8 @@ export default function Settings() {
     } finally {
       setSaving(false);
     }
-  }, [bonusPercentage, bonusCapCents, merchantEmail, brandColor, logoUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Page
