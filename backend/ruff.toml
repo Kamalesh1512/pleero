@@ -11,6 +11,8 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "B008",  # function call in argument defaults (FastAPI Depends pattern)
+    "I001",  # import block unsorted (auto-fixable, ignore in CI for now)
 ]
 
 [format]

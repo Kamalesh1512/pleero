@@ -5,11 +5,9 @@
  * Embedded in Shopify admin via App Bridge.
  */
 
-import { Page, Card, Layout, Text, BlockStack, InlineStack, Banner, Button } from '@shopify/polaris';
+import { Page, Card, Layout, Text, BlockStack, InlineStack, Banner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import {
-  getDashboardMetrics,
-  getMerchantSettings,
   formatCurrency,
   type DashboardMetrics,
   type Merchant

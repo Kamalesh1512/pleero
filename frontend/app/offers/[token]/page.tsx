@@ -144,7 +144,7 @@ export default function OfferPage({ params }: OfferPageProps) {
           </h1>
 
           <p className="text-gray-600 mb-8">
-            We've got you covered. Instead of waiting 5-7 days for a refund, keep{' '}
+            We&apos;ve got you covered. Instead of waiting 5-7 days for a refund, keep{' '}
             <strong className="text-gray-900">{creditAmount}</strong> as store credit and shop
             again instantly.
           </p>
