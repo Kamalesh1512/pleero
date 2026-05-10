@@ -1,0 +1,134 @@
+"""
+Offer model - represents a store credit offer sent to a customer.
+"""
+
+import uuid
+from datetime import datetime
+from enum import Enum as PyEnum
+
+from sqlalchemy import String, Integer, Enum, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base, TimestampMixin, generate_uuid
+
+
+class OfferStatus(PyEnum):
+    """Status of an offer."""
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    DECLINED = "DECLINED"
+    EXPIRED = "EXPIRED"
+
+
+class Offer(Base, TimestampMixin):
+    """
+    Offer model - one record per refund that gets an offer.
+
+    Attributes:
+        id: UUID primary key
+        merchant_id: Foreign key to merchant who owns this offer
+        shopify_refund_id: Shopify refund ID (from webhook)
+        shopify_order_id: Shopify order ID (from webhook)
+        customer_email: Customer's email address
+        customer_first_name: Customer's first name
+        refund_amount_cents: Original refund amount in cents
+        credit_amount_cents: Credit amount with bonus in cents
+        bonus_applied_cents: Bonus amount (difference between credit and refund)
+        offer_token: UUID token for public URL (unique, indexed)
+        status: Current status of the offer
+        sent_at: When the offer email was sent
+        accepted_at: When the customer accepted the offer
+        declined_at: When the customer declined the offer
+        expired_at: When the offer expired
+        created_at: When offer was created (webhook received)
+        updated_at: Last update timestamp
+    """
+
+    __tablename__ = "offers"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=generate_uuid,
+    )
+
+    merchant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("merchants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    shopify_refund_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    shopify_order_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    customer_email: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    customer_first_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    refund_amount_cents: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    credit_amount_cents: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    bonus_applied_cents: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    offer_token: Mapped[str] = mapped_column(
+        String(36),  # UUID string length
+        unique=True,
+        index=True,
+        nullable=False,
+        default=lambda: str(uuid.uuid4()),
+    )
+
+    status: Mapped[OfferStatus] = mapped_column(
+        Enum(OfferStatus),
+        default=OfferStatus.PENDING,
+        nullable=False,
+    )
+
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    declined_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    expired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "shopify_refund_id", name="uq_merchant_refund"),
+    )
