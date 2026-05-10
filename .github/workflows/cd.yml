@@ -127,7 +127,7 @@ jobs:
       - name: Copy deployment files to server
         run: |
           scp docker-compose.production.yml ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/
-          scp Caddyfile.production ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/Caddyfile
+          scp Caddyfile.production ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/Caddyfile.production
 
       - name: Deploy backend
         run: |
