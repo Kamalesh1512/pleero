@@ -5,7 +5,7 @@ Handles OAuth flow, HMAC verification, and token exchange.
 
 import hmac
 import hashlib
-from urllib.parse import urlencode, parse_qs
+from urllib.parse import urlencode
 from typing import Any
 
 import httpx

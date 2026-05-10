@@ -7,11 +7,9 @@ import pytest
 import hmac
 import hashlib
 import base64
-import json
 from unittest.mock import patch, AsyncMock
 
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.models.offer import Offer, OfferStatus
 from app.utils.shopify_webhooks import (
     verify_webhook_hmac,
     parse_refund_webhook,

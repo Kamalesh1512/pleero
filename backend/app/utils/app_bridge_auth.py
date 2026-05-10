@@ -61,14 +61,14 @@ def verify_session_token(token: str) -> dict[str, str]:
         raise HTTPException(
             status_code=401,
             detail="Session token expired",
-        )
+        ) from None
 
     except jwt.InvalidTokenError as e:
         logger.warning("session_token_invalid", error=str(e))
         raise HTTPException(
             status_code=401,
             detail="Invalid session token",
-        )
+        ) from None
 
 
 async def get_current_shop(

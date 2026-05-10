@@ -89,7 +89,7 @@ export default function Settings() {
                 <RangeSlider
                   label={`Bonus Percentage: ${bonusPercentage}%`}
                   value={bonusPercentage}
-                  onChange={setBonusPercentage}
+                  onChange={(value) => setBonusPercentage(value)}
                   min={5}
                   max={20}
                   output

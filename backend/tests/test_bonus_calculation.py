@@ -3,7 +3,6 @@ Tests for bonus calculation logic.
 Ensures bonus percentage and cap are applied correctly.
 """
 
-import pytest
 from app.utils.shopify_webhooks import calculate_bonus
 
 
