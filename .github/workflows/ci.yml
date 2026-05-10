@@ -53,7 +53,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./backend
-        run: uv pip install --system -r pyproject.toml
+        run: |
+          uv pip install --system .
+          uv pip install --system ruff mypy pytest pytest-cov pytest-asyncio
 
       - name: Run ruff (linter)
         working-directory: ./backend
