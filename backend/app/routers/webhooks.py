@@ -46,7 +46,9 @@ async def verify_webhook_signature(
     """
     body = await request.body()
 
-    if not verify_webhook_hmac(body, x_shopify_hmac_sha256, settings.SHOPIFY_API_SECRET):
+    if not verify_webhook_hmac(
+        body, x_shopify_hmac_sha256, settings.SHOPIFY_API_SECRET
+    ):
         logger.error(
             "webhook_hmac_verification_failed",
             headers=dict(request.headers),
@@ -206,6 +208,7 @@ async def handle_refund_created(
 
         # Send offer email
         from app.services.email import send_offer_email
+
         await send_offer_email(db, offer.id)
 
         # Return 200 OK (Shopify requires this within 5 seconds)

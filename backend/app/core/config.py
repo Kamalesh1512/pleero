@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://pleero_user:pleero_password@localhost:5432/pleero"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://pleero_user:pleero_password@localhost:5432/pleero"
+    )
 
     # Redis
     REDIS_URL: str = "redis://:your_redis_password@localhost:6379/0"

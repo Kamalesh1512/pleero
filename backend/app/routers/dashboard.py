@@ -50,9 +50,7 @@ async def get_dashboard_metrics(
         - revenue_retained_cents: Total credit amount issued
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -87,11 +85,10 @@ async def get_dashboard_metrics(
             func.sum(
                 func.case(
                     (Offer.status == OfferStatus.ACCEPTED, Offer.credit_amount_cents),
-                    else_=0
+                    else_=0,
                 )
             ).label("revenue_retained"),
-        )
-        .where(
+        ).where(
             Offer.merchant_id == merchant.id,
             Offer.created_at >= start_date,
             Offer.created_at <= end_date,
@@ -106,11 +103,7 @@ async def get_dashboard_metrics(
     revenue_retained_cents = row.revenue_retained or 0
 
     # Calculate acceptance rate
-    acceptance_rate = (
-        (offers_accepted / offers_sent * 100)
-        if offers_sent > 0
-        else 0.0
-    )
+    acceptance_rate = (offers_accepted / offers_sent * 100) if offers_sent > 0 else 0.0
 
     logger.info(
         "dashboard_metrics_fetched",
@@ -142,9 +135,7 @@ async def get_merchant_settings(
         Merchant settings (bonus %, cap, branding, etc.)
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -181,9 +172,7 @@ async def update_merchant_settings(
         Updated merchant settings
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:

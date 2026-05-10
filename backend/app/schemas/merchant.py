@@ -40,7 +40,9 @@ class MerchantBase(BaseModel):
 class MerchantCreate(MerchantBase):
     """Schema for creating a new merchant."""
 
-    access_token: str = Field(..., description="Shopify access token (will be encrypted)")
+    access_token: str = Field(
+        ..., description="Shopify access token (will be encrypted)"
+    )
 
 
 class MerchantUpdate(BaseModel):

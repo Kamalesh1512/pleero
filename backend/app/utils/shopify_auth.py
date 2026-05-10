@@ -43,9 +43,7 @@ def verify_hmac(query_params: dict[str, Any], secret: str) -> bool:
 
     # Compute HMAC
     computed_hmac = hmac.new(
-        secret.encode("utf-8"),
-        encoded_params.encode("utf-8"),
-        hashlib.sha256
+        secret.encode("utf-8"), encoded_params.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
     # Constant-time comparison
