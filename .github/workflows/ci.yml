@@ -163,7 +163,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SHOPIFY_API_KEY: test_key
           SHOPIFY_API_SECRET: test_secret
-          ENCRYPTION_KEY: dGVzdF9lbmNyeXB0aW9uX2tleV8zMmJ5dGVzIQ==
+          ENCRYPTION_KEY: N_t6TTknlLtDdR-oqT_ML_EvLX7Mp22--zcKHlUQh7o=
           RESEND_API_KEY: test_resend
           APP_ENV: test
 
