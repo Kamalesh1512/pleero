@@ -3,23 +3,23 @@ Shopify webhook endpoints.
 Receives and processes webhook events from Shopify.
 """
 
-from fastapi import APIRouter, Request, HTTPException, Depends, Header
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.models.offer import Offer, OfferStatus
-from app.models.offer_event import OfferEvent, EventType
+from app.models.offer_event import EventType, OfferEvent
+from app.schemas.webhook import AppUninstalledPayload, RefundWebhookPayload
 from app.utils.shopify_webhooks import (
-    verify_webhook_hmac,
+    calculate_bonus,
     parse_refund_webhook,
     should_skip_offer,
-    calculate_bonus,
+    verify_webhook_hmac,
 )
-from app.schemas.webhook import RefundWebhookPayload, AppUninstalledPayload
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])

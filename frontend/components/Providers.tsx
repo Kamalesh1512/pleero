@@ -6,7 +6,6 @@
  */
 
 import { AppProvider } from '@shopify/polaris';
-// @ts-expect-error - CSS import doesn't have type declarations
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect } from 'react';
 import { initAppBridge } from '@/lib/shopify-app-bridge';
