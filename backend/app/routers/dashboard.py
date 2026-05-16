@@ -3,20 +3,20 @@ Dashboard API endpoints.
 Provides merchant metrics and settings management.
 """
 
-from datetime import datetime, UTC
 from calendar import monthrange
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
 from pydantic import BaseModel
+from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant
 from app.models.offer import Offer, OfferStatus
-from app.utils.app_bridge_auth import get_current_shop
 from app.schemas.merchant import MerchantResponse, MerchantUpdate
+from app.utils.app_bridge_auth import get_current_shop
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["dashboard"])

@@ -3,18 +3,18 @@ Main FastAPI application.
 Entry point for the Pleero backend.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
-from app.routers import auth, webhooks, offers, dashboard, billing
+from app.routers import auth, billing, dashboard, offers, webhooks
 
 # Configure logging on import
 configure_logging()
