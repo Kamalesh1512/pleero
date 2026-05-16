@@ -125,7 +125,7 @@ async def create_subscription(
             )
             return None
 
-        confirmation_url = result.get("confirmationUrl")
+        confirmation_url: str | None = result.get("confirmationUrl")
         if not confirmation_url:
             logger.error(
                 "create_subscription_no_confirmation_url",
@@ -135,7 +135,7 @@ async def create_subscription(
 
         # Store subscription ID
         subscription = result.get("appSubscription", {})
-        subscription_id = subscription.get("id")
+        subscription_id: str | None = subscription.get("id")
 
         if subscription_id:
             merchant.subscription_id = subscription_id

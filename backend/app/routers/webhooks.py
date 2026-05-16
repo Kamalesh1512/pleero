@@ -227,7 +227,9 @@ async def handle_refund_created(
         )
         # Return 200 to prevent retry on bugs (log to Sentry instead)
         # We don't want Shopify to retry on application errors
-        return {"status": "error", "message": str(e)}
+        # In production, hide error details; in development, show them
+        error_message = str(e) if settings.APP_ENV == "development" else "Internal processing error"
+        return {"status": "error", "message": error_message}
 
 
 @router.post("/app/uninstalled")
@@ -292,4 +294,5 @@ async def handle_app_uninstalled(
             error=str(e),
             exc_info=True,
         )
-        return {"status": "error", "message": str(e)}
+        error_message = str(e) if settings.APP_ENV == "development" else "Internal processing error"
+        return {"status": "error", "message": error_message}

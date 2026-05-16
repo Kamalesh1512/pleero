@@ -15,36 +15,60 @@ import {
   Text,
   Banner,
 } from '@shopify/polaris';
-import { useState, useCallback } from 'react';
-import { formatCurrency } from '@/lib/api';
+import { useState, useCallback, useEffect } from 'react';
+import { formatCurrency, getSessionToken, getMerchantSettings, updateMerchantSettings } from '@/lib/api';
 
 export default function Settings() {
   const [bonusPercentage, setBonusPercentage] = useState(10);
   const [bonusCapCents, setBonusCapCents] = useState(5000);
-  const [merchantEmail, setMerchantEmail] = useState('merchant@example.com');
+  const [merchantEmail, setMerchantEmail] = useState('');
   const [brandColor, setBrandColor] = useState('#000000');
   const [logoUrl, setLogoUrl] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
+
+  // Load merchant settings on mount
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const token = await getSessionToken();
+        const merchant = await getMerchantSettings(token);
+
+        setBonusPercentage(merchant.bonus_percentage);
+        setBonusCapCents(merchant.bonus_cap_cents);
+        setMerchantEmail(merchant.merchant_email);
+        setBrandColor(merchant.brand_color);
+        setLogoUrl(merchant.logo_url || '');
+        setLoading(false);
+      } catch (err) {
+        setSaveMessage({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Failed to load settings',
+        });
+        setLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     setSaveMessage(null);
 
     try {
-      // TODO: Get session token from App Bridge
-      // const token = await getSessionToken();
-      // await updateMerchantSettings(token, {
-      //   bonus_percentage: bonusPercentage,
-      //   bonus_cap_cents: bonusCapCents,
-      //   merchant_email: merchantEmail,
-      //   brand_color: brandColor,
-      //   logo_url: logoUrl || null,
-      // });
+      const token = await getSessionToken();
+      await updateMerchantSettings(token, {
+        bonus_percentage: bonusPercentage,
+        bonus_cap_cents: bonusCapCents,
+        merchant_email: merchantEmail,
+        brand_color: brandColor,
+        logo_url: logoUrl || null,
+      });
 
-      // Mock success for MVP
       setSaveMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (err) {
       setSaveMessage({
@@ -54,8 +78,15 @@ export default function Settings() {
     } finally {
       setSaving(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bonusPercentage, bonusCapCents, merchantEmail, brandColor, logoUrl]);
+
+  if (loading) {
+    return (
+      <Page title="Settings">
+        <Text as="p">Loading settings...</Text>
+      </Page>
+    );
+  }
 
   return (
     <Page

@@ -117,12 +117,12 @@ async def exchange_code_for_token(shop: str, code: str) -> str | None:
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=data, timeout=10.0)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=data)
             response.raise_for_status()
 
             result = response.json()
-            access_token = result.get("access_token")
+            access_token: str | None = result.get("access_token")
 
             if not access_token:
                 logger.error(

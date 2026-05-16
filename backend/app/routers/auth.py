@@ -11,6 +11,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import redis.asyncio as aioredis
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -27,12 +29,14 @@ from app.utils.webhook_registration import register_webhooks
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 # Redis client for state token storage
 redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
 @router.get("/install")
+@limiter.limit("10/minute")
 async def install(
     request: Request,
     shop: str,
@@ -93,6 +97,7 @@ async def install(
 
 
 @router.get("/callback")
+@limiter.limit("10/minute")
 async def callback(
     request: Request,
     code: str,

@@ -9,6 +9,9 @@ import { Page, Card, Layout, Text, BlockStack, InlineStack, Banner } from '@shop
 import { useEffect, useState, useCallback } from 'react';
 import {
   formatCurrency,
+  getSessionToken,
+  getDashboardMetrics,
+  getMerchantSettings,
   type DashboardMetrics,
   type Merchant
 } from '@/lib/api';
@@ -23,42 +26,33 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadData() {
       try {
-        // TODO: Get session token from App Bridge
-        // For MVP, this would need proper App Bridge integration
-        // const token = await getSessionToken();
-        // const [metricsData, merchantData] = await Promise.all([
-        //   getDashboardMetrics(token),
-        //   getMerchantSettings(token)
-        // ]);
+        const token = await getSessionToken();
+        const [metricsData, merchantData] = await Promise.all([
+          getDashboardMetrics(token),
+          getMerchantSettings(token)
+        ]);
 
-        // Mock data for MVP development
-        const mockMetrics: DashboardMetrics = {
-          offers_sent: 12,
-          offers_accepted: 8,
-          offers_declined: 4,
-          acceptance_rate: 66.7,
-          revenue_retained_cents: 48000,
-        };
-
-        const mockMerchant: Merchant = {
-          id: '123',
-          shop_domain: 'test.myshopify.com',
-          merchant_email: 'merchant@example.com',
-          bonus_percentage: 10,
-          bonus_cap_cents: 5000,
-          brand_color: '#000000',
-          logo_url: null,
-          subscription_status: 'TRIAL', // Change to 'EXPIRED' to see billing banner
-          trial_ends_at: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        setMetrics(mockMetrics);
-        setMerchant(mockMerchant);
+        setMetrics(metricsData);
+        setMerchant(merchantData);
         setLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+
+        // Provide helpful message if App Bridge isn't initialized
+        if (errorMessage.includes('App Bridge not initialized')) {
+          setError(
+            'This app must be accessed from Shopify Admin. ' +
+            'Open your app from the Shopify Partner Dashboard or install it on a test store.'
+          );
+        } else if (errorMessage.includes('fetch')) {
+          setError(
+            `Cannot connect to backend at ${process.env.NEXT_PUBLIC_API_URL}. ` +
+            'Make sure your backend is running and accessible. ' +
+            'Check browser console for details.'
+          );
+        } else {
+          setError(errorMessage);
+        }
         setLoading(false);
       }
     }
@@ -197,7 +191,7 @@ export default function Dashboard() {
                     1. When a customer requests a refund, Pleero automatically sends them an offer
                   </Text>
                   <Text as="p">
-                    2. They can choose to take {metrics ? `${formatCurrency(5000)} bonus` : 'bonus'} as store credit instead
+                    2. They can choose to take {merchant ? `${formatCurrency(merchant.bonus_cap_cents)} bonus` : 'bonus'} as store credit instead
                   </Text>
                   <Text as="p">
                     3. Credits are instant and never expire

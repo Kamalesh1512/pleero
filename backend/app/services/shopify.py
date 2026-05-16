@@ -254,7 +254,7 @@ async def get_customer_id_by_email(
         if not edges:
             return None
 
-        customer_id = edges[0]["node"]["id"]
+        customer_id: str = edges[0]["node"]["id"]
         return customer_id
 
     except Exception as e:
