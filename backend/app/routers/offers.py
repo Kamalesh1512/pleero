@@ -5,10 +5,12 @@ Public routes for customers to view, accept, or decline store credit offers.
 
 from datetime import datetime, UTC
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from app.core.logging import get_logger
@@ -19,6 +21,7 @@ from app.services.shopify import issue_store_credit, cancel_refund
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/offers", tags=["offers"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 class OfferResponse(BaseModel):
@@ -46,7 +49,9 @@ class OfferActionResponse(BaseModel):
 
 
 @router.get("/{offer_token}")
+@limiter.limit("20/minute")
 async def get_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferResponse:
@@ -89,7 +94,7 @@ async def get_offer(
 
     # Load merchant for branding
     result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
-    merchant = result.scalar_one_or_none()
+    merchant: Merchant | None = result.scalar_one_or_none()
 
     if not merchant:
         logger.error("merchant_not_found", offer_id=str(offer.id))
@@ -125,7 +130,9 @@ async def get_offer(
 
 
 @router.post("/{offer_token}/accept")
+@limiter.limit("5/minute")
 async def accept_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferActionResponse:
@@ -278,7 +285,9 @@ async def accept_offer(
 
 
 @router.post("/{offer_token}/decline")
+@limiter.limit("5/minute")
 async def decline_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferActionResponse:

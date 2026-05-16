@@ -10,9 +10,16 @@ from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
 # Create async engine
+# SQL echo only in development AND not using production database
+# Fail-closed: if APP_ENV is missing or wrong, echo defaults to False
+should_echo = (
+    settings.APP_ENV == "development"
+    and "localhost" in settings.DATABASE_URL
+)
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.APP_ENV == "development",
+    echo=should_echo,
     poolclass=NullPool if settings.APP_ENV == "test" else None,
     pool_pre_ping=True,
 )

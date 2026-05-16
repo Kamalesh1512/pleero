@@ -3,7 +3,7 @@ Billing endpoints.
 Handles Shopify recurring charge activation and callback.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.services.billing import create_subscription, update_merchant_subscription
 from app.utils.app_bridge_auth import get_current_shop
+from app.utils.shopify_auth import verify_hmac
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -78,6 +79,7 @@ async def activate_subscription(
 
 @router.get("/callback")
 async def billing_callback(
+    request: Request,
     charge_id: str = Query(..., description="Shopify charge ID"),
     shop: str = Query(..., description="Shop domain"),
     db: AsyncSession = Depends(get_db),
@@ -88,13 +90,15 @@ async def billing_callback(
     After merchant approves the charge, Shopify redirects here.
 
     Steps:
-    1. Verify charge ID
-    2. Update merchant subscription status to ACTIVE
-    3. Redirect to frontend dashboard
+    1. Verify HMAC signature (security: prevent forged callbacks)
+    2. Verify charge ID with Shopify API
+    3. Update merchant subscription status to ACTIVE
+    4. Redirect to frontend dashboard
 
     Query params:
         charge_id: Shopify charge ID
         shop: Shop domain
+        hmac: HMAC signature from Shopify
 
     Returns:
         Redirect to frontend dashboard
@@ -104,6 +108,19 @@ async def billing_callback(
         shop=shop,
         charge_id=charge_id,
     )
+
+    # Step 1: Verify HMAC signature (Hard Rule #1)
+    query_params = dict(request.query_params)
+    if not verify_hmac(query_params, settings.SHOPIFY_API_SECRET):
+        logger.error(
+            "billing_callback_hmac_failed",
+            shop=shop,
+            charge_id=charge_id,
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="HMAC verification failed",
+        )
 
     # Load merchant
     result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))

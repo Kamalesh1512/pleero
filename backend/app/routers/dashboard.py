@@ -8,7 +8,7 @@ from calendar import monthrange
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -77,13 +77,13 @@ async def get_dashboard_metrics(
         select(
             func.count(Offer.id).label("total"),
             func.sum(
-                func.case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)
+                case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)
             ).label("accepted"),
             func.sum(
-                func.case((Offer.status == OfferStatus.DECLINED, 1), else_=0)
+                case((Offer.status == OfferStatus.DECLINED, 1), else_=0)
             ).label("declined"),
             func.sum(
-                func.case(
+                case(
                     (Offer.status == OfferStatus.ACCEPTED, Offer.credit_amount_cents),
                     else_=0,
                 )

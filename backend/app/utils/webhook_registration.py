@@ -41,7 +41,7 @@ async def register_webhooks(shop: str, access_token: str) -> bool:
 
     success_count = 0
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         for webhook in webhooks:
             success = await _register_single_webhook(
                 client=client,
@@ -202,7 +202,7 @@ async def delete_all_webhooks(shop: str, access_token: str) -> bool:
     """
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             # Get all webhook IDs
             response = await client.post(
                 f"https://{shop}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json",

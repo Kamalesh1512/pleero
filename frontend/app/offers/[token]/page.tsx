@@ -7,6 +7,7 @@
  */
 
 import { use, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { getOffer, acceptOffer, declineOffer, formatCurrency, type Offer } from '@/lib/api';
 
 interface OfferPageProps {
@@ -128,11 +129,15 @@ export default function OfferPage({ params }: OfferPageProps) {
       <div className="max-w-md w-full">
         {/* Logo */}
         {offer.merchant_logo_url && (
-          <div className="text-center mb-8">
-            <img
+          <div className="text-center mb-8 relative h-[80px]">
+            <Image
               src={offer.merchant_logo_url}
               alt="Store logo"
-              className="mx-auto max-w-[200px] h-auto"
+              width={200}
+              height={80}
+              className="mx-auto"
+              style={{ objectFit: 'contain' }}
+              priority
             />
           </div>
         )}

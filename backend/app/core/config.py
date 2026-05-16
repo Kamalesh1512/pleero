@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str | None = None
 
     # Application
-    APP_ENV: str = "development"
+    APP_ENV: str = "production"  # Fail-closed: default to production for safety
     API_BASE_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 

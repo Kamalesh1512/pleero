@@ -5,6 +5,7 @@ Hard rule #4: Use httpx (async), never requests (blocking).
 
 from datetime import datetime, UTC
 from uuid import UUID
+from html import escape
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,11 +57,26 @@ def build_offer_email_html(
     credit_amount = format_currency(credit_amount_cents)
     refund_amount = format_currency(refund_amount_cents)
 
-    logo_html = ""
+    # Sanitize all user-controlled inputs to prevent XSS
+    safe_merchant_name = escape(merchant_name)
+    safe_customer_first_name = escape(customer_first_name)
+    safe_brand_color = escape(merchant_brand_color)
+
+    # Validate and sanitize URLs
+    safe_logo_url = ""
     if merchant_logo_url:
+        # Only allow HTTPS URLs for logo
+        if merchant_logo_url.startswith("https://"):
+            safe_logo_url = escape(merchant_logo_url)
+
+    safe_offer_url = escape(offer_url)
+    safe_decline_url = escape(decline_url)
+
+    logo_html = ""
+    if safe_logo_url:
         logo_html = f'''
         <div style="text-align: center; margin-bottom: 32px;">
-            <img src="{merchant_logo_url}" alt="{merchant_name}" style="max-width: 200px; height: auto;">
+            <img src="{safe_logo_url}" alt="{safe_merchant_name}" style="max-width: 200px; height: auto;">
         </div>
         '''
 
@@ -77,7 +93,7 @@ def build_offer_email_html(
             {logo_html}
 
             <h1 style="font-size: 24px; font-weight: 600; color: #111111; margin: 0 0 16px 0;">
-                Hi {customer_first_name}, your return is approved.
+                Hi {safe_customer_first_name}, your return is approved.
             </h1>
 
             <p style="font-size: 16px; color: #333333; line-height: 1.5; margin: 0 0 32px 0;">
@@ -86,7 +102,7 @@ def build_offer_email_html(
 
             <!-- Primary CTA -->
             <div style="margin-bottom: 24px;">
-                <a href="{offer_url}" style="display: inline-block; background-color: {merchant_brand_color}; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 6px; font-size: 16px; font-weight: 600; min-width: 200px; text-align: center;">
+                <a href="{safe_offer_url}" style="display: inline-block; background-color: {safe_brand_color}; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 6px; font-size: 16px; font-weight: 600; min-width: 200px; text-align: center;">
                     Take the {credit_amount} credit
                 </a>
             </div>
@@ -101,7 +117,7 @@ def build_offer_email_html(
 
             <!-- Secondary link -->
             <p style="font-size: 14px; color: #666666; text-align: center; margin: 0 0 8px 0;">
-                <a href="{decline_url}" style="color: #666666; text-decoration: underline;">
+                <a href="{safe_decline_url}" style="color: #666666; text-decoration: underline;">
                     I still want a cash refund ({refund_amount}, 5-7 days)
                 </a>
             </p>
@@ -109,7 +125,7 @@ def build_offer_email_html(
             <!-- Footer -->
             <div style="margin-top: 48px; padding-top: 24px; border-top: 1px solid #e5e5e5; text-align: center;">
                 <p style="font-size: 12px; color: #999999; margin: 0;">
-                    Secured by {merchant_name}
+                    Secured by {safe_merchant_name}
                 </p>
             </div>
         </div>
@@ -161,7 +177,7 @@ async def send_offer_email(
         result = await db.execute(
             select(Merchant).where(Merchant.id == offer.merchant_id)
         )
-        merchant = result.scalar_one_or_none()
+        merchant: Merchant | None = result.scalar_one_or_none()
 
         if not merchant:
             logger.error(
@@ -193,7 +209,7 @@ async def send_offer_email(
         )
 
         # Send via Resend API
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 "https://api.resend.com/emails",
                 headers={
