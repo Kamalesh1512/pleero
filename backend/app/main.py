@@ -62,10 +62,12 @@ allowed_origins = [
 
 # Add development origins only in development
 if settings.APP_ENV == "development":
-    allowed_origins.extend([
-        "http://localhost:3000",
-        "https://dev.pleero.app",
-    ])
+    allowed_origins.extend(
+        [
+            "http://localhost:3000",
+            "https://dev.pleero.app",
+        ]
+    )
 
 app.add_middleware(
     CORSMiddleware,
