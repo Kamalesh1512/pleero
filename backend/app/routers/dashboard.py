@@ -103,7 +103,9 @@ async def get_dashboard_metrics(
     revenue_retained_cents = row.revenue_retained or 0
 
     # Calculate acceptance rate
-    acceptance_rate = (offers_accepted / offers_sent * 100) if offers_sent > 0 else 0.0
+    acceptance_rate = (
+        (offers_accepted / offers_sent * 100) if offers_sent > 0 else 0.0
+    )
 
     logger.info(
         "dashboard_metrics_fetched",
