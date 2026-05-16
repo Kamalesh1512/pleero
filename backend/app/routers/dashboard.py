@@ -76,12 +76,12 @@ async def get_dashboard_metrics(
     result = await db.execute(
         select(
             func.count(Offer.id).label("total"),
-            func.sum(
-                case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)
-            ).label("accepted"),
-            func.sum(
-                case((Offer.status == OfferStatus.DECLINED, 1), else_=0)
-            ).label("declined"),
+            func.sum(case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)).label(
+                "accepted"
+            ),
+            func.sum(case((Offer.status == OfferStatus.DECLINED, 1), else_=0)).label(
+                "declined"
+            ),
             func.sum(
                 case(
                     (Offer.status == OfferStatus.ACCEPTED, Offer.credit_amount_cents),
