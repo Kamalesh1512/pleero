@@ -6,7 +6,7 @@
  */
 
 import { AppProvider } from '@shopify/polaris';
-// @ts-ignore - CSS import doesn't have type declarations
+// @ts-expect-error - CSS import doesn't have type declarations
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect } from 'react';
 import { initAppBridge } from '@/lib/shopify-app-bridge';
@@ -24,7 +24,7 @@ export default function Providers({ children }: PropsWithChildren) {
       if (host) {
         try {
           initAppBridge(apiKey, host);
-        } catch (error) {
+        } catch {
           // App Bridge initialization failed - silent in production
         }
       }

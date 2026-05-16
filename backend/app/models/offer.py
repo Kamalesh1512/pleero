@@ -3,6 +3,7 @@ Offer model - represents a store credit offer sent to a customer.
 """
 
 import secrets
+import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 
