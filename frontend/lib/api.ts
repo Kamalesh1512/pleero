@@ -114,10 +114,25 @@ export async function updateMerchantSettings(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update settings: ${response.statusText}`);
+    const body = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to save settings (${response.status}): ${body}`);
   }
 
   return response.json();
+}
+
+export async function getShopLogo(sessionToken: string): Promise<string | null> {
+  const response = await fetch(`${API_BASE_URL}/api/shop/logo`, {
+    headers: {
+      'Authorization': `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  return data.logo_url ?? null;
 }
 
 /**

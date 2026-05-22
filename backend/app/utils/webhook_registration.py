@@ -23,7 +23,7 @@ async def register_webhooks(shop: str, access_token: str) -> bool:
     """
     webhooks = [
         {
-            "topic": "REFUNDS_CREATE",
+            "topic": "REFUNDS_CREATE",  # Plural - correct GraphQL topic name
             "endpoint": f"{settings.API_BASE_URL}/webhooks/refunds/create",
         },
         {

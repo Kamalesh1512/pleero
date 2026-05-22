@@ -214,6 +214,7 @@ async def accept_offer(
             amount_cents=offer.credit_amount_cents,
             currency="USD",
             note=f"Store credit from return (Order {offer.shopify_order_id})",
+            customer_shopify_id=offer.customer_shopify_id,
         )
 
         if not credit_issued:

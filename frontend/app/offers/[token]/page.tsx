@@ -3,19 +3,17 @@
 /**
  * Public offer page - customer-facing.
  * NOT embedded in Shopify (standalone page).
- * Mobile-first design with Tailwind (NOT Polaris).
+ * Follows light design system (max-width 420px, #F7F8FA background).
  */
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { getOffer, acceptOffer, declineOffer, formatCurrency, type Offer } from '@/lib/api';
 
-interface OfferPageProps {
-  params: Promise<{ token: string }>;
-}
-
-export default function OfferPage({ params }: OfferPageProps) {
-  const { token } = use(params);
+export default function OfferPage() {
+  const params = useParams();
+  const token = params.token as string;
   const [offer, setOffer] = useState<Offer | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -71,9 +69,18 @@ export default function OfferPage({ params }: OfferPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: 'var(--offer-page-bg)' }}
+      >
         <div className="text-center">
-          <p className="text-gray-600">Loading your offer...</p>
+          <p style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '14px',
+            color: 'var(--offer-text-secondary)'
+          }}>
+            Loading your offer...
+          </p>
         </div>
       </div>
     );
@@ -81,10 +88,35 @@ export default function OfferPage({ params }: OfferPageProps) {
 
   if (error && !offer) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-sm p-8 text-center">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">Offer Not Found</h1>
-          <p className="text-gray-600">{error}</p>
+      <div
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: 'var(--offer-page-bg)' }}
+      >
+        <div
+          className="w-full p-8 text-center"
+          style={{
+            maxWidth: '420px',
+            background: 'var(--offer-card-bg)',
+            border: '1px solid var(--offer-border)',
+            borderRadius: 'var(--radius-md)'
+          }}
+        >
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '22px',
+            fontWeight: 500,
+            color: 'var(--offer-text-primary)',
+            marginBottom: 'var(--space-4)'
+          }}>
+            Offer not found
+          </h1>
+          <p style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '14px',
+            color: 'var(--offer-text-secondary)'
+          }}>
+            {error}
+          </p>
         </div>
       </div>
     );
@@ -92,25 +124,52 @@ export default function OfferPage({ params }: OfferPageProps) {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-sm p-8 text-center">
-          <div className="mb-4">
+      <div
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: 'var(--offer-page-bg)' }}
+      >
+        <div
+          className="w-full p-8 text-center"
+          style={{
+            maxWidth: '420px',
+            background: 'var(--offer-card-bg)',
+            border: '1px solid var(--offer-border)',
+            borderRadius: 'var(--radius-md)'
+          }}
+        >
+          <div style={{ marginBottom: 'var(--space-4)' }}>
             <svg
-              className="mx-auto h-16 w-16 text-green-500"
+              className="mx-auto"
+              width="64"
+              height="64"
               fill="none"
-              stroke="currentColor"
+              stroke="var(--pleero-green)"
               viewBox="0 0 24 24"
+              strokeWidth={2}
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">All Set!</h1>
-          <p className="text-gray-600">{success}</p>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '22px',
+            fontWeight: 500,
+            color: 'var(--offer-text-primary)',
+            marginBottom: 'var(--space-3)'
+          }}>
+            All set!
+          </h1>
+          <p style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '14px',
+            color: 'var(--offer-text-secondary)'
+          }}>
+            {success}
+          </p>
         </div>
       </div>
     );
@@ -121,89 +180,218 @@ export default function OfferPage({ params }: OfferPageProps) {
   }
 
   const creditAmount = formatCurrency(offer.credit_amount_cents);
-  const refundAmount = formatCurrency(offer.refund_amount_cents);
   const bonusAmount = formatCurrency(offer.bonus_applied_cents);
+  const merchantName = offer.merchant_logo_url ? 'your favorite store' : 'the merchant';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        {/* Logo */}
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'var(--offer-page-bg)' }}
+    >
+      <div className="w-full" style={{ maxWidth: '420px' }}>
+        {/* Merchant Logo */}
         {offer.merchant_logo_url && (
-          <div className="text-center mb-8 relative h-[80px]">
+          <div className="text-center relative" style={{
+            marginBottom: 'var(--space-8)',
+            height: '80px'
+          }}>
             <Image
               src={offer.merchant_logo_url}
               alt="Store logo"
               width={200}
               height={80}
               className="mx-auto"
-              style={{ objectFit: 'contain' }}
+              style={{ objectFit: 'contain', maxHeight: '80px' }}
               priority
             />
           </div>
         )}
 
         {/* Main Card */}
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+        <div
+          className="w-full"
+          style={{
+            background: 'var(--offer-card-bg)',
+            border: '1px solid var(--offer-border)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-6)'
+          }}
+        >
+          {/* Greeting */}
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '22px',
+            fontWeight: 500,
+            color: 'var(--offer-text-primary)',
+            marginBottom: 'var(--space-3)'
+          }}>
             Hi {offer.customer_first_name}, your return is approved.
           </h1>
 
-          <p className="text-gray-600 mb-8">
-            We&apos;ve got you covered. Instead of waiting 5-7 days for a refund, keep{' '}
-            <strong className="text-gray-900">{creditAmount}</strong> as store credit and shop
-            again instantly.
-          </p>
+          {/* Credit Amount - Prominent */}
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '14px',
+              color: 'var(--offer-text-secondary)',
+              marginBottom: 'var(--space-2)'
+            }}>
+              Instead of waiting 5-7 days for a refund, get
+            </p>
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '28px',
+              fontWeight: 600,
+              color: 'var(--offer-text-primary)',
+              marginBottom: 'var(--space-2)'
+            }}>
+              {creditAmount}
+            </p>
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '14px',
+              color: 'var(--offer-text-secondary)'
+            }}>
+              in store credit to use right now
+            </p>
+          </div>
 
           {/* Primary CTA */}
           <button
             onClick={handleAccept}
             disabled={processing}
-            className="w-full mb-4 py-4 px-6 rounded-lg font-semibold text-white text-lg min-h-[56px] transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: offer.merchant_brand_color }}
+            className="w-full"
+            style={{
+              background: processing ? 'var(--pleero-muted)' : 'var(--pleero-green)',
+              color: '#FFFFFF',
+              fontFamily: 'var(--font-display)',
+              fontSize: '16px',
+              fontWeight: 600,
+              height: '52px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              cursor: processing ? 'not-allowed' : 'pointer',
+              transition: 'background 0.15s ease',
+              marginBottom: 'var(--space-4)'
+            }}
+            onMouseEnter={(e) => {
+              if (!processing) {
+                e.currentTarget.style.background = 'var(--pleero-green-hover)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!processing) {
+                e.currentTarget.style.background = 'var(--pleero-green)';
+              }
+            }}
           >
             {processing ? 'Processing...' : `Take the ${creditAmount} credit`}
           </button>
 
-          {/* Benefits */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start">
-                <span className="mr-2">✓</span>
+          {/* Benefits List */}
+          <div style={{
+            background: 'var(--offer-page-bg)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-4)',
+            marginBottom: 'var(--space-5)'
+          }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <li style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '13px',
+                color: 'var(--offer-text-secondary)',
+                marginBottom: 'var(--space-2)',
+                display: 'flex',
+                alignItems: 'flex-start'
+              }}>
+                <span style={{ marginRight: 'var(--space-2)', color: 'var(--pleero-green)' }}>✓</span>
                 <span>Instant – use it right now</span>
               </li>
-              <li className="flex items-start">
-                <span className="mr-2">✓</span>
+              <li style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '13px',
+                color: 'var(--offer-text-secondary)',
+                marginBottom: 'var(--space-2)',
+                display: 'flex',
+                alignItems: 'flex-start'
+              }}>
+                <span style={{ marginRight: 'var(--space-2)', color: 'var(--pleero-green)' }}>✓</span>
                 <span>No expiry – keep it forever</span>
               </li>
-              <li className="flex items-start">
-                <span className="mr-2">✓</span>
+              <li style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '13px',
+                color: 'var(--offer-text-secondary)',
+                display: 'flex',
+                alignItems: 'flex-start'
+              }}>
+                <span style={{ marginRight: 'var(--space-2)', color: 'var(--pleero-green)' }}>✓</span>
                 <span>Bonus {bonusAmount} included</span>
               </li>
             </ul>
           </div>
 
-          {/* Error message */}
+          {/* Error Message */}
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div style={{
+              background: 'rgba(229, 115, 115, 0.1)',
+              border: '1px solid rgba(229, 115, 115, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-4)',
+              marginBottom: 'var(--space-4)'
+            }}>
+              <p style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '13px',
+                color: 'var(--pleero-danger)',
+                margin: 0
+              }}>
+                {error}
+              </p>
             </div>
           )}
 
-          {/* Secondary link */}
+          {/* Secondary Action - Cash Refund Link */}
           <div className="text-center">
             <button
               onClick={handleDecline}
               disabled={processing}
-              className="text-gray-600 underline text-sm hover:text-gray-900 disabled:opacity-50"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontFamily: 'var(--font-display)',
+                fontSize: '13px',
+                color: processing ? 'var(--offer-text-hint)' : 'var(--offer-text-hint)',
+                cursor: processing ? 'not-allowed' : 'pointer',
+                textDecoration: 'none',
+                padding: 0,
+                transition: 'color 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!processing) {
+                  e.currentTarget.style.color = 'var(--offer-text-secondary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!processing) {
+                  e.currentTarget.style.color = 'var(--offer-text-hint)';
+                }
+              }}
             >
-              I still want a cash refund ({refundAmount}, 5-7 days)
+              Proceed with cash refund
             </button>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-gray-500">Secured by your favorite store</p>
+        {/* Trust Line */}
+        <div className="text-center" style={{ marginTop: 'var(--space-6)' }}>
+          <p style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            color: 'var(--offer-text-hint)'
+          }}>
+            Secured by {merchantName}
+          </p>
         </div>
       </div>
     </div>

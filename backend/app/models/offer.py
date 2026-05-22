@@ -80,6 +80,11 @@ class Offer(Base, TimestampMixin):
         index=True,
     )
 
+    order_number: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     customer_email: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -88,6 +93,13 @@ class Offer(Base, TimestampMixin):
     customer_first_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    # Shopify GID stored from webhook payload — avoids protected customers query at accept time
+    # Format: "gid://shopify/Customer/12345678"
+    customer_shopify_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
     )
 
     refund_amount_cents: Mapped[int] = mapped_column(

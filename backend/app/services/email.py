@@ -193,8 +193,10 @@ async def send_offer_email(
             f"{settings.FRONTEND_URL}/offers/{offer.offer_token}?action=decline"
         )
 
-        # Extract merchant name from shop domain
-        merchant_name = merchant.shop_domain.split(".")[0].replace("-", " ").title()
+        # Use stored shop name; fall back to domain derivation for legacy rows
+        merchant_name = merchant.shop_name or (
+            merchant.shop_domain.split(".")[0].replace("-", " ").title()
+        )
 
         # Build email HTML
         html_content = build_offer_email_html(
@@ -217,7 +219,7 @@ async def send_offer_email(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "from": "returns@pleero.app",
+                    "from": "Pleero <returns@pleero.app>",
                     "to": [offer.customer_email],
                     "reply_to": merchant.merchant_email,
                     "subject": f"{merchant_name} approved your return",

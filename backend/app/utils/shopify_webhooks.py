@@ -74,6 +74,11 @@ class RefundWebhookData:
         self.customer_country = customer.get("default_address", {}).get(
             "country_code", ""
         )
+        # Build customer GID from numeric ID — avoids protected customers query at credit time
+        raw_customer_id = customer.get("id")
+        self.customer_shopify_gid = (
+            f"gid://shopify/Customer/{raw_customer_id}" if raw_customer_id else None
+        )
 
         # Get return reason (if available)
         # Note: Shopify doesn't always provide this in the webhook

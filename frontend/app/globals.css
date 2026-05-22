@@ -3,21 +3,61 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Backgrounds — three-step dark depth (merchant dashboard) */
+  --pleero-ink:            #0B0C0E;   /* page background */
+  --pleero-ink-surface:    #141618;   /* sidebar, panels */
+  --pleero-ink-card:       #1D2023;   /* cards, modals, popovers */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Borders */
+  --pleero-ink-border:     rgba(255, 255, 255, 0.07);   /* default */
+  --pleero-ink-border-md:  rgba(255, 255, 255, 0.12);   /* hover / emphasis */
+
+  /* Credit green — primary action colour */
+  --pleero-green:          #2D7A4F;   /* buttons, active states */
+  --pleero-green-hover:    #3DA066;   /* hover */
+  --pleero-green-faint:    #182D22;   /* active nav bg, tinted surfaces */
+  --pleero-green-text:     #6FCF97;   /* success labels, delta values */
+
+  /* Text (dark surface) */
+  --pleero-white:          #F2F4F7;   /* primary text on dark */
+  --pleero-muted:          #8A9099;   /* secondary text, placeholders */
+  --pleero-dimmed:         #4A5058;   /* tertiary, column headers */
+
+  /* Semantic */
+  --pleero-danger:         #E57373;   /* errors, destructive actions */
+  --pleero-amber:          #FCD34D;   /* warnings, pending states */
+
+  /* Fonts */
+  --font-display:          'Inter', sans-serif;  /* TODO: Replace with Geist when available */
+  --font-mono:             'DM Mono', monospace;
+
+  /* Radii */
+  --radius-sm:             6px;
+  --radius-md:             10px;
+  --radius-lg:             14px;
+
+  /* Spacing (4px base unit) */
+  --space-1:               4px;
+  --space-2:               8px;
+  --space-3:               12px;
+  --space-4:               16px;
+  --space-5:               20px;
+  --space-6:               24px;
+  --space-8:               32px;
+
+  /* Customer offer page (light surface) */
+  --offer-page-bg:         #F7F8FA;
+  --offer-card-bg:         #FFFFFF;
+  --offer-border:          rgba(0, 0, 0, 0.08);
+  --offer-text-primary:    #0B0C0E;
+  --offer-text-secondary:  #6B7280;
+  --offer-text-hint:       #9CA3AF;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
