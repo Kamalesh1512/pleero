@@ -14,9 +14,9 @@
 # Markdown files (only commit README.md)
 *.md
 !README.md
-# Keep docs directory markdown files
-!docs/*.md
-!docs/**/*.md
+
+# docs/ folder is internal product documentation — not part of the repo
+docs/
 
 # Python
 __pycache__/

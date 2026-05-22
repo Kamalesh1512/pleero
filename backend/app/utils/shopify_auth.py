@@ -5,7 +5,7 @@ Handles OAuth flow, HMAC verification, and token exchange.
 
 import hmac
 import hashlib
-from urllib.parse import urlencode, parse_qs
+from urllib.parse import urlencode
 from typing import Any
 
 import httpx
@@ -43,9 +43,7 @@ def verify_hmac(query_params: dict[str, Any], secret: str) -> bool:
 
     # Compute HMAC
     computed_hmac = hmac.new(
-        secret.encode("utf-8"),
-        encoded_params.encode("utf-8"),
-        hashlib.sha256
+        secret.encode("utf-8"), encoded_params.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
     # Constant-time comparison
@@ -119,12 +117,12 @@ async def exchange_code_for_token(shop: str, code: str) -> str | None:
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=data, timeout=10.0)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=data)
             response.raise_for_status()
 
             result = response.json()
-            access_token = result.get("access_token")
+            access_token: str | None = result.get("access_token")
 
             if not access_token:
                 logger.error(

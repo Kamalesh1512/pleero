@@ -6,10 +6,15 @@ application_url = "https://pleero.app"
 embedded = true
 
 [access_scopes]
-scopes = "write_customers,write_orders,write_refunds,write_payment_terms"
+# See: https://shopify.dev/docs/api/usage/access-scopes
+# write_orders: Covers refunds AND webhook subscriptions
+# write_customers: Customer management
+# write_store_credit_account_transactions: Required for issuing store credit via GraphQL
+scopes = "write_orders,write_customers,write_store_credit_account_transactions"
 
 [auth]
 redirect_urls = [
+  "https://api.pleero.app/auth/callback",
   "https://api-dev.pleero.app/auth/callback",
   "https://api-dev.pleero.app/auth/shopify/callback"
 ]
@@ -19,11 +24,11 @@ api_version = "2026-04"
 
 [[webhooks.subscriptions]]
 topics = ["refunds/create"]
-uri = "/webhooks/refunds/create"
+uri = "https://api.pleero.app/webhooks/refunds/create"
 
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled"]
-uri = "/webhooks/app/uninstalled"
+uri = "https://api.pleero.app/webhooks/app/uninstalled"
 
 [pos]
 embedded = false

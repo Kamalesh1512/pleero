@@ -3,25 +3,23 @@ Shopify webhook endpoints.
 Receives and processes webhook events from Shopify.
 """
 
-from datetime import datetime, UTC
-
-from fastapi import APIRouter, Request, HTTPException, Depends, Header
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.models.offer import Offer, OfferStatus
-from app.models.offer_event import OfferEvent, EventType
+from app.models.offer_event import EventType, OfferEvent
+from app.schemas.webhook import AppUninstalledPayload, RefundWebhookPayload
 from app.utils.shopify_webhooks import (
-    verify_webhook_hmac,
+    calculate_bonus,
     parse_refund_webhook,
     should_skip_offer,
-    calculate_bonus,
+    verify_webhook_hmac,
 )
-from app.schemas.webhook import RefundWebhookPayload, AppUninstalledPayload
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -48,7 +46,9 @@ async def verify_webhook_signature(
     """
     body = await request.body()
 
-    if not verify_webhook_hmac(body, x_shopify_hmac_sha256, settings.SHOPIFY_API_SECRET):
+    if not verify_webhook_hmac(
+        body, x_shopify_hmac_sha256, settings.SHOPIFY_API_SECRET
+    ):
         logger.error(
             "webhook_hmac_verification_failed",
             headers=dict(request.headers),
@@ -94,7 +94,7 @@ async def handle_refund_created(
 
     logger.info(
         "webhook_received",
-        event="refunds/create",
+        topic="refunds/create",
         shop=shop_domain,
         refund_id=payload.id,
         order_id=payload.order_id,
@@ -172,8 +172,10 @@ async def handle_refund_created(
             merchant_id=merchant.id,
             shopify_refund_id=str(webhook_data.refund_id),
             shopify_order_id=str(webhook_data.order_id),
+            order_number=webhook_data.order_name or None,
             customer_email=webhook_data.customer_email,
             customer_first_name=webhook_data.customer_first_name or "Customer",
+            customer_shopify_id=webhook_data.customer_shopify_gid,
             refund_amount_cents=webhook_data.refund_amount_cents,
             credit_amount_cents=credit_amount_cents,
             bonus_applied_cents=bonus_applied_cents,
@@ -208,6 +210,7 @@ async def handle_refund_created(
 
         # Send offer email
         from app.services.email import send_offer_email
+
         await send_offer_email(db, offer.id)
 
         # Return 200 OK (Shopify requires this within 5 seconds)
@@ -226,7 +229,11 @@ async def handle_refund_created(
         )
         # Return 200 to prevent retry on bugs (log to Sentry instead)
         # We don't want Shopify to retry on application errors
-        return {"status": "error", "message": str(e)}
+        # In production, hide error details; in development, show them
+        error_message = (
+            str(e) if settings.APP_ENV == "development" else "Internal processing error"
+        )
+        return {"status": "error", "message": error_message}
 
 
 @router.post("/app/uninstalled")
@@ -253,7 +260,7 @@ async def handle_app_uninstalled(
 
     logger.info(
         "webhook_received",
-        event="app/uninstalled",
+        topic="app/uninstalled",
         shop=shop_domain,
     )
 
@@ -291,4 +298,7 @@ async def handle_app_uninstalled(
             error=str(e),
             exc_info=True,
         )
-        return {"status": "error", "message": str(e)}
+        error_message = (
+            str(e) if settings.APP_ENV == "development" else "Internal processing error"
+        )
+        return {"status": "error", "message": error_message}

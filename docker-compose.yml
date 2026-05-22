@@ -27,7 +27,7 @@ services:
       - pleero_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,6 +48,7 @@ services:
       # - SENTRY_DSN=${SENTRY_DSN}
       - APP_ENV=production
       - API_BASE_URL=https://api.pleero.app
+      - FRONTEND_URL=https://pleero.app
     volumes:
       - ./backend:/app
     depends_on:

@@ -10,7 +10,9 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock* ./
+COPY app ./app
 
+# Install dependencies from pyproject.toml
 RUN uv pip install --system --no-cache .
 
 COPY . .

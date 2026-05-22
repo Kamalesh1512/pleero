@@ -8,7 +8,6 @@ import hashlib
 import base64
 from typing import Any
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.merchant import SubscriptionStatus
 
@@ -35,11 +34,7 @@ def verify_webhook_hmac(body: bytes, hmac_header: str, secret: str) -> bool:
 
     # Compute HMAC-SHA256
     computed_hmac = base64.b64encode(
-        hmac.new(
-            secret.encode("utf-8"),
-            body,
-            hashlib.sha256
-        ).digest()
+        hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
     ).decode("utf-8")
 
     # Constant-time comparison (prevents timing attacks)
@@ -65,8 +60,7 @@ class RefundWebhookData:
         # Get refund line items
         refund_line_items = payload.get("refund_line_items", [])
         self.refund_amount_cents = sum(
-            int(float(item.get("subtotal", 0)) * 100)
-            for item in refund_line_items
+            int(float(item.get("subtotal", 0)) * 100) for item in refund_line_items
         )
 
         # Get order data
@@ -77,7 +71,14 @@ class RefundWebhookData:
         customer = order.get("customer", {})
         self.customer_email = customer.get("email", "")
         self.customer_first_name = customer.get("first_name", "")
-        self.customer_country = customer.get("default_address", {}).get("country_code", "")
+        self.customer_country = customer.get("default_address", {}).get(
+            "country_code", ""
+        )
+        # Build customer GID from numeric ID — avoids protected customers query at credit time
+        raw_customer_id = customer.get("id")
+        self.customer_shopify_gid = (
+            f"gid://shopify/Customer/{raw_customer_id}" if raw_customer_id else None
+        )
 
         # Get return reason (if available)
         # Note: Shopify doesn't always provide this in the webhook

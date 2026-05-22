@@ -38,10 +38,6 @@ api.pleero.app {
         # Prevent MIME sniffing
         X-Content-Type-Options nosniff
 
-        # Prevent clickjacking (but allow Shopify embedding)
-        # Note: Shopify embedded apps need special frame handling
-        X-Frame-Options SAMEORIGIN
-
         # XSS protection
         X-XSS-Protection "1; mode=block"
 
@@ -50,6 +46,10 @@ api.pleero.app {
 
         # HSTS (force HTTPS)
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Content Security Policy
+        # Note: Using frame-ancestors instead of X-Frame-Options for Shopify embedding
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.shopify.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://api.pleero.app https://api-dev.pleero.app; frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com; base-uri 'self'; form-action 'self'"
 
         # Hide server version
         -Server

@@ -5,10 +5,12 @@ Public routes for customers to view, accept, or decline store credit offers.
 
 from datetime import datetime, UTC
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from app.core.logging import get_logger
@@ -19,6 +21,7 @@ from app.services.shopify import issue_store_credit, cancel_refund
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/offers", tags=["offers"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 class OfferResponse(BaseModel):
@@ -46,7 +49,9 @@ class OfferActionResponse(BaseModel):
 
 
 @router.get("/{offer_token}")
+@limiter.limit("20/minute")
 async def get_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferResponse:
@@ -65,9 +70,7 @@ async def get_offer(
         HTTPException: 404 if offer not found, 410 if offer expired/used
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:
@@ -90,10 +93,8 @@ async def get_offer(
         )
 
     # Load merchant for branding
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == offer.merchant_id)
-    )
-    merchant = result.scalar_one_or_none()
+    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
+    merchant: Merchant | None = result.scalar_one_or_none()
 
     if not merchant:
         logger.error("merchant_not_found", offer_id=str(offer.id))
@@ -129,7 +130,9 @@ async def get_offer(
 
 
 @router.post("/{offer_token}/accept")
+@limiter.limit("5/minute")
 async def accept_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferActionResponse:
@@ -157,9 +160,7 @@ async def accept_offer(
         HTTPException: 404 if not found, 410 if expired, 500 if credit fails
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:
@@ -194,9 +195,7 @@ async def accept_offer(
         )
 
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == offer.merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -215,6 +214,7 @@ async def accept_offer(
             amount_cents=offer.credit_amount_cents,
             currency="USD",
             note=f"Store credit from return (Order {offer.shopify_order_id})",
+            customer_shopify_id=offer.customer_shopify_id,
         )
 
         if not credit_issued:
@@ -282,11 +282,13 @@ async def accept_offer(
         raise HTTPException(
             status_code=500,
             detail="An error occurred while processing your request",
-        )
+        ) from None
 
 
 @router.post("/{offer_token}/decline")
+@limiter.limit("5/minute")
 async def decline_offer(
+    request: Request,
     offer_token: str,
     db: AsyncSession = Depends(get_db),
 ) -> OfferActionResponse:
@@ -308,9 +310,7 @@ async def decline_offer(
         HTTPException: 404 if not found, 410 if already processed
     """
     # Load offer
-    result = await db.execute(
-        select(Offer).where(Offer.offer_token == offer_token)
-    )
+    result = await db.execute(select(Offer).where(Offer.offer_token == offer_token))
     offer = result.scalar_one_or_none()
 
     if not offer:

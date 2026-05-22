@@ -34,9 +34,7 @@ async def get_shopify_client(
         Tuple of (client, shop_domain, access_token) or None if merchant not found
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.id == merchant_id)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -65,6 +63,7 @@ async def issue_store_credit(
     amount_cents: int,
     currency: str,
     note: str,
+    customer_shopify_id: str | None = None,
 ) -> bool:
     """
     Issue store credit to a customer via Shopify GraphQL API.
@@ -74,10 +73,11 @@ async def issue_store_credit(
     Args:
         db: Database session
         merchant_id: Merchant ID
-        customer_email: Customer email address
+        customer_email: Customer email address (fallback lookup)
         amount_cents: Credit amount in cents
         currency: Currency code (e.g., "USD")
         note: Note to attach to the credit
+        customer_shopify_id: Pre-known Shopify GID (avoids protected customers query)
 
     Returns:
         True if successful, False otherwise
@@ -89,12 +89,16 @@ async def issue_store_credit(
     client, shop_domain, _ = client_data
 
     try:
-        # First, get customer ID by email
-        customer_id = await get_customer_id_by_email(
-            client,
-            shop_domain,
-            customer_email,
-        )
+        # Use pre-known GID from webhook payload to avoid protected customers query.
+        # Fall back to email lookup only if GID wasn't stored (legacy offers).
+        if customer_shopify_id:
+            customer_id = customer_shopify_id
+        else:
+            customer_id = await get_customer_id_by_email(
+                client,
+                shop_domain,
+                customer_email,
+            )
 
         if not customer_id:
             logger.error(
@@ -108,10 +112,10 @@ async def issue_store_credit(
         # Convert cents to Shopify amount format (e.g., "50.00")
         amount = f"{amount_cents / 100:.2f}"
 
-        # Issue store credit via GraphQL
+        # Issue store credit via GraphQL (API 2026-04 signature: id + creditInput)
         mutation = """
-        mutation storeCreditAccountCredit($input: StoreCreditAccountCreditInput!) {
-            storeCreditAccountCredit(input: $input) {
+        mutation storeCreditAccountCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
+            storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
                 storeCreditAccountTransaction {
                     id
                     amount {
@@ -128,14 +132,13 @@ async def issue_store_credit(
         """
 
         variables = {
-            "input": {
-                "accountId": customer_id,
-                "amount": {
+            "id": customer_id,
+            "creditInput": {
+                "creditAmount": {
                     "amount": amount,
                     "currencyCode": currency,
                 },
-                "note": note,
-            }
+            },
         }
 
         url = f"https://{shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
@@ -251,12 +254,23 @@ async def get_customer_id_by_email(
         response.raise_for_status()
         data = response.json()
 
-        edges = data.get("data", {}).get("customers", {}).get("edges", [])
+        # data["data"] can be None when GraphQL returns errors — use `or {}` not `, {}`
+        gql_data = data.get("data") or {}
+        edges = gql_data.get("customers", {}).get("edges", [])
 
-        if not edges:
+        if "errors" in data:
+            logger.error(
+                "get_customer_id_graphql_error",
+                email=email,
+                errors=data["errors"],
+            )
             return None
 
-        customer_id = edges[0]["node"]["id"]
+        if not edges:
+            logger.warning("get_customer_id_not_found", email=email)
+            return None
+
+        customer_id: str = edges[0]["node"]["id"]
         return customer_id
 
     except Exception as e:

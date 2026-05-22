@@ -14,10 +14,13 @@ api.pleero.app {
 
     header {
         X-Content-Type-Options nosniff
-        X-Frame-Options DENY
         X-XSS-Protection "1; mode=block"
         Referrer-Policy strict-origin-when-cross-origin
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Content Security Policy (using frame-ancestors for Shopify embedding)
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.shopify.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://api.pleero.app https://api-dev.pleero.app; frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com; base-uri 'self'; form-action 'self'"
+
         -Server
     }
 }

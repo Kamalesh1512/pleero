@@ -1,213 +1,113 @@
-'use client';
+import type { Metadata } from 'next';
+import LandingPage from '@/components/LandingPage';
+
+export const metadata: Metadata = {
+  title: "Pleero – Turn Refunds Into Store Credit | Shopify App",
+  description: "Pleero automatically offers customers bonus store credit instead of cash refunds. Keep 15–25% of refund revenue in your store. 14-day free trial.",
+  alternates: { canonical: "https://pleero.app" },
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Pleero",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Shopify",
+      "url": "https://pleero.app",
+      "description": "Pleero automatically converts Shopify refund requests into bonus store credit offers, retaining 15–25% of refund revenue for DTC brands.",
+      "offers": {
+        "@type": "Offer",
+        "price": "99",
+        "priceCurrency": "USD",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "billingDuration": "P1M"
+        }
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "reviewCount": "1"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How does Pleero work with Shopify refunds?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "When a refund is created in your Shopify store, Pleero automatically sends the customer a branded email offering them bonus store credit instead of a cash refund. The customer can accept with one click or decline for a normal refund. No manual work required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do customers have to accept the store credit?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Customers always have the choice. The offer email shows the store credit option and the cash refund option with equal prominence. Customers who prefer cash simply click decline and their refund processes normally."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What percentage of refunds does Pleero convert to store credit?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "DTC apparel and footwear brands typically see 15–25% of refund requests converted to store credit when using Pleero. Actual results depend on your bonus percentage, AOV, and customer base."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How much does Pleero cost?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Pleero is $99/month USD, flat rate. There is a 14-day free trial with no credit card required. No rev-share, no per-transaction fees, no setup fees."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Pleero work with all Shopify plans?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Pleero works with all Shopify plans that support the Store Credit API. It is best suited for stores doing $2M–$20M GMV with 20–30% return rates."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long does setup take?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Install from the Shopify App Store in under 5 minutes. No code changes, no developer needed. Configure your bonus percentage and brand color, and Pleero starts working on the next refund."
+          }
+        }
+      ]
+    },
+    {
+      "@type": "Organization",
+      "name": "Pleero",
+      "url": "https://pleero.app",
+      "email": "support@pleero.app",
+      "sameAs": ["https://apps.shopify.com/pleero"]
+    }
+  ]
+};
 
 /**
- * Dashboard page - shows merchant metrics and recent activity.
- * Embedded in Shopify admin via App Bridge.
+ * Public landing page — shown to visitors who access pleero.app directly.
+ * Shopify Admin users are redirected to /dashboard by middleware.ts before
+ * this component ever renders.
  */
-
-import { Page, Card, Layout, Text, BlockStack, InlineStack, Banner } from '@shopify/polaris';
-import { useEffect, useState, useCallback } from 'react';
-import {
-  formatCurrency,
-  type DashboardMetrics,
-  type Merchant
-} from '@/lib/api';
-
-export default function Dashboard() {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [merchant, setMerchant] = useState<Merchant | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activatingBilling, setActivatingBilling] = useState(false);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        // TODO: Get session token from App Bridge
-        // For MVP, this would need proper App Bridge integration
-        // const token = await getSessionToken();
-        // const [metricsData, merchantData] = await Promise.all([
-        //   getDashboardMetrics(token),
-        //   getMerchantSettings(token)
-        // ]);
-
-        // Mock data for MVP development
-        const mockMetrics: DashboardMetrics = {
-          offers_sent: 12,
-          offers_accepted: 8,
-          offers_declined: 4,
-          acceptance_rate: 66.7,
-          revenue_retained_cents: 48000,
-        };
-
-        const mockMerchant: Merchant = {
-          id: '123',
-          shop_domain: 'test.myshopify.com',
-          merchant_email: 'merchant@example.com',
-          bonus_percentage: 10,
-          bonus_cap_cents: 5000,
-          brand_color: '#000000',
-          logo_url: null,
-          subscription_status: 'TRIAL', // Change to 'EXPIRED' to see billing banner
-          trial_ends_at: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        setMetrics(mockMetrics);
-        setMerchant(mockMerchant);
-        setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-        setLoading(false);
-      }
-    }
-
-    loadData();
-  }, []);
-
-  const handleActivateBilling = useCallback(async () => {
-    setActivatingBilling(true);
-    try {
-      // TODO: Get session token and call billing API
-      // const token = await getSessionToken();
-      // const response = await fetch(`${API_BASE_URL}/api/billing/activate`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      // });
-      // const data = await response.json();
-      // window.location.href = data.confirmation_url;
-
-      // Mock for MVP
-      alert('Billing activation would redirect to Shopify charge approval page');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to activate billing');
-    } finally {
-      setActivatingBilling(false);
-    }
-  }, []);
-
-  // Check if trial has ended
-  const shouldShowBillingBanner =
-    merchant &&
-    merchant.subscription_status !== 'ACTIVE' &&
-    merchant.trial_ends_at &&
-    new Date(merchant.trial_ends_at) < new Date();
-
-  if (loading) {
-    return (
-      <Page title="Dashboard">
-        <Text as="p">Loading...</Text>
-      </Page>
-    );
-  }
-
-  if (error || !metrics) {
-    return (
-      <Page title="Dashboard">
-        <Text as="p" tone="critical">
-          {error || 'Failed to load metrics'}
-        </Text>
-      </Page>
-    );
-  }
-
+export default function Page() {
   return (
-    <Page
-      title="Dashboard"
-      subtitle="This month's performance"
-      primaryAction={{
-        content: 'Settings',
-        url: '/settings',
-      }}
-    >
-      <Layout>
-        <Layout.Section>
-          <BlockStack gap="400">
-            {/* Billing Banner */}
-            {shouldShowBillingBanner && (
-              <Banner
-                title="Your trial has ended"
-                tone="warning"
-                action={{
-                  content: 'Activate $99/month plan',
-                  onAction: handleActivateBilling,
-                  loading: activatingBilling,
-                }}
-              >
-                <Text as="p">
-                  Activate your subscription to continue receiving store credit offers
-                </Text>
-              </Banner>
-            )}
-
-            {/* Metrics Cards */}
-            <InlineStack gap="400">
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Offers Sent
-                  </Text>
-                  <Text as="p" variant="heading2xl">
-                    {metrics.offers_sent}
-                  </Text>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Accepted
-                  </Text>
-                  <Text as="p" variant="heading2xl" tone="success">
-                    {metrics.offers_accepted}
-                  </Text>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    {metrics.acceptance_rate.toFixed(1)}% acceptance rate
-                  </Text>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Revenue Retained
-                  </Text>
-                  <Text as="p" variant="heading2xl" tone="success">
-                    {formatCurrency(metrics.revenue_retained_cents)}
-                  </Text>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    Store credit issued
-                  </Text>
-                </BlockStack>
-              </Card>
-            </InlineStack>
-
-            {/* Getting Started */}
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingLg">
-                  How it works
-                </Text>
-                <BlockStack gap="200">
-                  <Text as="p">
-                    1. When a customer requests a refund, Pleero automatically sends them an offer
-                  </Text>
-                  <Text as="p">
-                    2. They can choose to take {metrics ? `${formatCurrency(5000)} bonus` : 'bonus'} as store credit instead
-                  </Text>
-                  <Text as="p">
-                    3. Credits are instant and never expire
-                  </Text>
-                </BlockStack>
-              </BlockStack>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-    </Page>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <LandingPage />
+    </>
   );
 }

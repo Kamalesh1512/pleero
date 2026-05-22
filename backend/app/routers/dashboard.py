@@ -3,23 +3,47 @@ Dashboard API endpoints.
 Provides merchant metrics and settings management.
 """
 
-from datetime import datetime, UTC
 from calendar import monthrange
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from pydantic import BaseModel
+from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant
 from app.models.offer import Offer, OfferStatus
-from app.utils.app_bridge_auth import get_current_shop
 from app.schemas.merchant import MerchantResponse, MerchantUpdate
+from app.utils.app_bridge_auth import get_current_shop
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["dashboard"])
+
+
+class OfferListItem(BaseModel):
+    """Single offer in the offers list."""
+
+    id: str
+    order_number: str
+    customer_email: str
+    refund_amount_cents: int
+    credit_amount_cents: int
+    status: OfferStatus
+    revenue_retained_cents: int | None
+    created_at: datetime
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
+class OfferListResponse(BaseModel):
+    """Response for offers list endpoint."""
+
+    offers: list[OfferListItem]
+    total: int
 
 
 class DashboardMetrics(BaseModel):
@@ -50,9 +74,7 @@ async def get_dashboard_metrics(
         - revenue_retained_cents: Total credit amount issued
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -78,20 +100,19 @@ async def get_dashboard_metrics(
     result = await db.execute(
         select(
             func.count(Offer.id).label("total"),
+            func.sum(case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)).label(
+                "accepted"
+            ),
+            func.sum(case((Offer.status == OfferStatus.DECLINED, 1), else_=0)).label(
+                "declined"
+            ),
             func.sum(
-                func.case((Offer.status == OfferStatus.ACCEPTED, 1), else_=0)
-            ).label("accepted"),
-            func.sum(
-                func.case((Offer.status == OfferStatus.DECLINED, 1), else_=0)
-            ).label("declined"),
-            func.sum(
-                func.case(
+                case(
                     (Offer.status == OfferStatus.ACCEPTED, Offer.credit_amount_cents),
-                    else_=0
+                    else_=0,
                 )
             ).label("revenue_retained"),
-        )
-        .where(
+        ).where(
             Offer.merchant_id == merchant.id,
             Offer.created_at >= start_date,
             Offer.created_at <= end_date,
@@ -106,11 +127,10 @@ async def get_dashboard_metrics(
     revenue_retained_cents = row.revenue_retained or 0
 
     # Calculate acceptance rate
-    acceptance_rate = (
-        (offers_accepted / offers_sent * 100)
-        if offers_sent > 0
-        else 0.0
-    )
+    if offers_sent > 0:
+        acceptance_rate = offers_accepted / offers_sent * 100
+    else:
+        acceptance_rate = 0.0
 
     logger.info(
         "dashboard_metrics_fetched",
@@ -142,9 +162,7 @@ async def get_merchant_settings(
         Merchant settings (bonus %, cap, branding, etc.)
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -181,9 +199,7 @@ async def update_merchant_settings(
         Updated merchant settings
     """
     # Load merchant
-    result = await db.execute(
-        select(Merchant).where(Merchant.shop_domain == shop)
-    )
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
 
     if not merchant:
@@ -220,3 +236,149 @@ async def update_merchant_settings(
     )
 
     return MerchantResponse.model_validate(merchant)
+
+
+@router.get("/shop/logo")
+async def get_shop_logo(
+    shop: str = Depends(get_current_shop),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str | None]:
+    """
+    Fetch the merchant's shop logo from Shopify's brand API.
+
+    Returns:
+        logo_url: CDN URL of the shop logo, or null if not set
+    """
+    import httpx
+    from app.core.encryption import decrypt_token
+
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
+    merchant = result.scalar_one_or_none()
+
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+
+    access_token = decrypt_token(merchant.access_token_encrypted)
+
+    query = """
+    query {
+      shop {
+        brand {
+          logo {
+            image {
+              url
+            }
+          }
+        }
+      }
+    }
+    """
+
+    from app.core.config import settings as app_settings
+
+    try:
+        async with httpx.AsyncClient(
+            headers={
+                "X-Shopify-Access-Token": access_token,
+                "Content-Type": "application/json",
+            },
+            timeout=10.0,
+        ) as client:
+            response = await client.post(
+                f"https://{shop}/admin/api/{app_settings.SHOPIFY_API_VERSION}/graphql.json",
+                json={"query": query},
+            )
+            response.raise_for_status()
+            data = response.json()
+            logo_url = (
+                (data.get("data") or {})
+                .get("shop", {})
+                .get("brand", {})
+                .get("logo", {})
+                .get("image", {})
+                .get("url")
+            )
+            return {"logo_url": logo_url}
+    except Exception:
+        return {"logo_url": None}
+
+
+@router.get("/offers")
+async def get_merchant_offers(
+    shop: str = Depends(get_current_shop),
+    db: AsyncSession = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+) -> OfferListResponse:
+    """
+    Get list of all offers for the current merchant.
+
+    Requires App Bridge session token authentication.
+
+    Args:
+        limit: Maximum number of offers to return (default 100)
+        offset: Number of offers to skip (default 0)
+
+    Returns:
+        List of offers with customer and order details
+    """
+    # Load merchant
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
+    merchant = result.scalar_one_or_none()
+
+    if not merchant:
+        logger.error("merchant_not_found", shop=shop)
+        raise HTTPException(
+            status_code=404,
+            detail="Merchant not found",
+        )
+
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(Offer.id)).where(Offer.merchant_id == merchant.id)
+    )
+    total = count_result.scalar_one()
+
+    # Get offers, ordered by created_at desc (newest first)
+    result = await db.execute(
+        select(Offer)
+        .where(Offer.merchant_id == merchant.id)
+        .order_by(Offer.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    offers = result.scalars().all()
+
+    # Convert to response format
+    offer_items = []
+    for offer in offers:
+        # Calculate revenue retained (only for accepted offers)
+        revenue_retained_cents = (
+            offer.credit_amount_cents if offer.status == OfferStatus.ACCEPTED else None
+        )
+
+        offer_items.append(
+            OfferListItem(
+                id=str(offer.id),
+                order_number=offer.order_number or offer.shopify_order_id,
+                customer_email=offer.customer_email,
+                refund_amount_cents=offer.refund_amount_cents,
+                credit_amount_cents=offer.credit_amount_cents,
+                status=offer.status,
+                revenue_retained_cents=revenue_retained_cents,
+                created_at=offer.created_at,
+            )
+        )
+
+    logger.info(
+        "offers_list_fetched",
+        shop=shop,
+        merchant_id=str(merchant.id),
+        total=total,
+        returned=len(offer_items),
+    )
+
+    return OfferListResponse(
+        offers=offer_items,
+        total=total,
+    )

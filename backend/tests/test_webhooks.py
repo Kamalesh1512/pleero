@@ -7,11 +7,9 @@ import pytest
 import hmac
 import hashlib
 import base64
-import json
 from unittest.mock import patch, AsyncMock
 
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.models.offer import Offer, OfferStatus
 from app.utils.shopify_webhooks import (
     verify_webhook_hmac,
     parse_refund_webhook,
@@ -87,9 +85,7 @@ class TestRefundWebhookParsing:
         payload = {
             "id": 123,
             "order_id": 456,
-            "refund_line_items": [
-                {"id": 1, "subtotal": "50.00", "total_tax": "5.00"}
-            ],
+            "refund_line_items": [{"id": 1, "subtotal": "50.00", "total_tax": "5.00"}],
             "order": {},
         }
 
@@ -129,14 +125,12 @@ class TestOfferSkipLogic:
     def test_skip_defective_return(self, mock_refund_webhook_payload):
         """Test that defective returns are skipped."""
         # Add defective return reason
-        mock_refund_webhook_payload["refund_line_items"][0][
-            "return_reason"
-        ] = "defective"
+        mock_refund_webhook_payload["refund_line_items"][0]["return_reason"] = (
+            "defective"
+        )
 
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.ACTIVE
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
         assert should_skip is True
         assert reason == "defective_item"
@@ -149,9 +143,7 @@ class TestOfferSkipLogic:
         ] = "CA"
 
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.ACTIVE
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
         assert should_skip is True
         assert reason == "non_us_customer"
@@ -180,9 +172,7 @@ class TestOfferSkipLogic:
         mock_refund_webhook_payload["order"]["customer"]["email"] = ""
 
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.ACTIVE
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
         assert should_skip is True
         assert reason == "no_email"
@@ -193,9 +183,7 @@ class TestOfferSkipLogic:
         mock_refund_webhook_payload["refund_line_items"][0]["subtotal"] = "0.00"
 
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.ACTIVE
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
         assert should_skip is True
         assert reason == "zero_amount"
@@ -203,9 +191,7 @@ class TestOfferSkipLogic:
     def test_do_not_skip_valid_refund(self, mock_refund_webhook_payload):
         """Test that valid refunds are NOT skipped."""
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.ACTIVE
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
         assert should_skip is False
         assert reason == ""
@@ -213,9 +199,7 @@ class TestOfferSkipLogic:
     def test_trial_subscription_allowed(self, mock_refund_webhook_payload):
         """Test that TRIAL subscriptions are allowed."""
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
-        should_skip, reason = should_skip_offer(
-            webhook_data, SubscriptionStatus.TRIAL
-        )
+        should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.TRIAL)
 
         assert should_skip is False
         assert reason == ""
@@ -243,11 +227,9 @@ class TestWebhookEndpoint:
         await db_session.commit()
 
         # Mock HMAC verification
-        with patch(
-            "app.routers.webhooks.verify_webhook_hmac", return_value=True
-        ):
+        with patch("app.routers.webhooks.verify_webhook_hmac", return_value=True):
             # Mock email sending
-            with patch("app.routers.webhooks.send_offer_email", new_callable=AsyncMock):
+            with patch("app.services.email.send_offer_email", new_callable=AsyncMock):
                 response = await client.post(
                     "/webhooks/refunds/create",
                     json=mock_refund_webhook_payload,
@@ -262,12 +244,12 @@ class TestWebhookEndpoint:
         assert data["status"] == "success"
         assert "offer_id" in data
 
-    async def test_webhook_invalid_hmac_rejected(self, client, mock_refund_webhook_payload):
+    async def test_webhook_invalid_hmac_rejected(
+        self, client, mock_refund_webhook_payload
+    ):
         """Test that webhook with invalid HMAC is rejected."""
         # Mock HMAC verification to fail
-        with patch(
-            "app.routers.webhooks.verify_webhook_hmac", return_value=False
-        ):
+        with patch("app.routers.webhooks.verify_webhook_hmac", return_value=False):
             response = await client.post(
                 "/webhooks/refunds/create",
                 json=mock_refund_webhook_payload,
@@ -297,13 +279,11 @@ class TestWebhookEndpoint:
         await db_session.commit()
 
         # Add defective reason
-        mock_refund_webhook_payload["refund_line_items"][0][
-            "return_reason"
-        ] = "defective"
+        mock_refund_webhook_payload["refund_line_items"][0]["return_reason"] = (
+            "defective"
+        )
 
-        with patch(
-            "app.routers.webhooks.verify_webhook_hmac", return_value=True
-        ):
+        with patch("app.routers.webhooks.verify_webhook_hmac", return_value=True):
             response = await client.post(
                 "/webhooks/refunds/create",
                 json=mock_refund_webhook_payload,

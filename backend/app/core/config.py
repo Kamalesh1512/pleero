@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://pleero_user:pleero_password@localhost:5432/pleero"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://pleero_user:pleero_password@localhost:5432/pleero"
+    )
 
     # Redis
     REDIS_URL: str = "redis://:your_redis_password@localhost:6379/0"
@@ -27,7 +29,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str | None = None
 
     # Application
-    APP_ENV: str = "development"
+    APP_ENV: str = "production"  # Fail-closed: default to production for safety
     API_BASE_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 

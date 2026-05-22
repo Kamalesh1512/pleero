@@ -99,6 +99,11 @@ class Merchant(Base, TimestampMixin):
         nullable=False,
     )
 
+    shop_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     trial_ends_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

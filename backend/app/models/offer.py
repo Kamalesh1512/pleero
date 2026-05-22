@@ -2,6 +2,7 @@
 Offer model - represents a store credit offer sent to a customer.
 """
 
+import secrets
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
@@ -10,6 +11,15 @@ from sqlalchemy import String, Integer, Enum, DateTime, ForeignKey, UniqueConstr
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, generate_uuid
+
+
+def generate_secure_offer_token() -> str:
+    """
+    Generate cryptographically secure offer token.
+    Uses secrets module for 256-bit entropy.
+    Returns URL-safe base64-encoded string.
+    """
+    return secrets.token_urlsafe(32)  # 32 bytes = 256 bits of entropy
 
 
 class OfferStatus(PyEnum):
@@ -70,6 +80,11 @@ class Offer(Base, TimestampMixin):
         index=True,
     )
 
+    order_number: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     customer_email: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -78,6 +93,13 @@ class Offer(Base, TimestampMixin):
     customer_first_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    # Shopify GID stored from webhook payload — avoids protected customers query at accept time
+    # Format: "gid://shopify/Customer/12345678"
+    customer_shopify_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
     )
 
     refund_amount_cents: Mapped[int] = mapped_column(
@@ -96,11 +118,11 @@ class Offer(Base, TimestampMixin):
     )
 
     offer_token: Mapped[str] = mapped_column(
-        String(36),  # UUID string length
+        String(48),  # URL-safe base64 encoded 32 bytes (~43 chars + padding)
         unique=True,
         index=True,
         nullable=False,
-        default=lambda: str(uuid.uuid4()),
+        default=generate_secure_offer_token,
     )
 
     status: Mapped[OfferStatus] = mapped_column(

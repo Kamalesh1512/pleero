@@ -3,6 +3,8 @@
  * Handles communication with backend API.
  */
 
+import { getSessionToken as getAppBridgeSessionToken } from './shopify-app-bridge';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface DashboardMetrics {
@@ -55,10 +57,8 @@ export interface OfferActionResponse {
  * Get session token from App Bridge.
  * This should be called from client components with access to App Bridge.
  */
-export async function getSessionToken(): Promise<string | null> {
-  // This will be implemented in the component using App Bridge
-  // For now, return null as placeholder
-  return null;
+export async function getSessionToken(): Promise<string> {
+  return await getAppBridgeSessionToken();
 }
 
 /**
@@ -114,10 +114,25 @@ export async function updateMerchantSettings(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update settings: ${response.statusText}`);
+    const body = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to save settings (${response.status}): ${body}`);
   }
 
   return response.json();
+}
+
+export async function getShopLogo(sessionToken: string): Promise<string | null> {
+  const response = await fetch(`${API_BASE_URL}/api/shop/logo`, {
+    headers: {
+      'Authorization': `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  return data.logo_url ?? null;
 }
 
 /**
