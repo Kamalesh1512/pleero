@@ -99,3 +99,4 @@ backups/
 *.pem
 *.key
 !scripts/*.sh
+..pleero-backup.git/

@@ -18,6 +18,7 @@ from app.models.offer import Offer, OfferStatus
 from app.models.merchant import Merchant
 from app.models.offer_event import OfferEvent, EventType
 from app.services.shopify import issue_store_credit, cancel_refund
+from app.services.email import format_currency
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -212,7 +213,7 @@ async def accept_offer(
             merchant_id=merchant.id,
             customer_email=offer.customer_email,
             amount_cents=offer.credit_amount_cents,
-            currency="USD",
+            currency=merchant.currency,
             note=f"Store credit from return (Order {offer.shopify_order_id})",
             customer_shopify_id=offer.customer_shopify_id,
         )
@@ -265,9 +266,10 @@ async def accept_offer(
             credit_amount_cents=offer.credit_amount_cents,
         )
 
+        credit_str = format_currency(offer.credit_amount_cents, offer.currency_code)
         return OfferActionResponse(
             status="success",
-            message=f"Store credit of ${offer.credit_amount_cents / 100:.0f} has been added to your account",
+            message=f"Store credit of {credit_str} has been added to your account",
         )
 
     except HTTPException:

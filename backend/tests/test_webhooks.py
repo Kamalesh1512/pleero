@@ -135,9 +135,8 @@ class TestOfferSkipLogic:
         assert should_skip is True
         assert reason == "defective_item"
 
-    def test_skip_non_us_customer(self, mock_refund_webhook_payload):
-        """Test that non-US customers are skipped (Hard rule #10)."""
-        # Change country to Canada
+    def test_non_us_customer_receives_offer(self, mock_refund_webhook_payload):
+        """Test that non-US customers receive offers (global launch — no region filter)."""
         mock_refund_webhook_payload["order"]["customer"]["default_address"][
             "country_code"
         ] = "CA"
@@ -145,8 +144,8 @@ class TestOfferSkipLogic:
         webhook_data = parse_refund_webhook(mock_refund_webhook_payload)
         should_skip, reason = should_skip_offer(webhook_data, SubscriptionStatus.ACTIVE)
 
-        assert should_skip is True
-        assert reason == "non_us_customer"
+        assert should_skip is False
+        assert reason == ""
 
     def test_skip_inactive_subscription(self, mock_refund_webhook_payload):
         """Test that inactive subscriptions are skipped."""

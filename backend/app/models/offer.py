@@ -117,6 +117,13 @@ class Offer(Base, TimestampMixin):
         nullable=False,
     )
 
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        default="USD",
+        nullable=False,
+        server_default="USD",
+    )
+
     offer_token: Mapped[str] = mapped_column(
         String(48),  # URL-safe base64 encoded 32 bytes (~43 chars + padding)
         unique=True,

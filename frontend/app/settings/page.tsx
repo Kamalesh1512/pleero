@@ -14,7 +14,7 @@ import {
   Button,
 } from '@shopify/polaris';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { formatCurrency, getSessionToken, getMerchantSettings, updateMerchantSettings, getShopLogo } from '@/lib/api';
+import { getSessionToken, getMerchantSettings, updateMerchantSettings, getShopLogo } from '@/lib/api';
 import AppFrame from '@/components/AppFrame';
 
 export default function Settings() {
@@ -180,15 +180,14 @@ export default function Settings() {
                     type="number"
                     value={String(bonusCapCents / 100)}
                     onChange={(value) => setBonusCapCents(Math.round(Number(value) * 100))}
-                    prefix="$"
-                    helpText={`Maximum bonus amount (currently ${formatCurrency(bonusCapCents)})`}
+                    helpText={`Maximum bonus amount in your store's currency (currently ${bonusCapCents / 100})`}
                     autoComplete="off"
                   />
 
                   <Text as="p" variant="bodyMd" tone="subdued">
-                    Example: A $100 refund becomes{' '}
-                    {formatCurrency(10000 + (10000 * bonusPercentage) / 100)} credit
-                    (capped at {formatCurrency(bonusCapCents)} bonus)
+                    Example: A 100 refund becomes{' '}
+                    {((10000 + (10000 * bonusPercentage) / 100) / 100).toFixed(0)} credit
+                    (capped at {bonusCapCents / 100} bonus)
                   </Text>
                 </BlockStack>
               </Card>

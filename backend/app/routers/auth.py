@@ -166,8 +166,9 @@ async def callback(
     # Encrypt access token (hard rule #2)
     encrypted_token = encrypt_token(access_token)
 
-    # Fetch shop name from Shopify (used in customer-facing emails)
+    # Fetch shop details from Shopify (used in customer-facing emails and credit issuance)
     shop_name: str | None = None
+    shop_currency: str = "USD"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -175,9 +176,11 @@ async def callback(
                 headers={"X-Shopify-Access-Token": access_token},
             )
             if resp.status_code == 200:
-                shop_name = resp.json().get("shop", {}).get("name")
+                shop_data = resp.json().get("shop", {})
+                shop_name = shop_data.get("name")
+                shop_currency = shop_data.get("currency", "USD")
     except Exception:
-        logger.warning("shop_name_fetch_failed", shop=shop)
+        logger.warning("shop_details_fetch_failed", shop=shop)
 
     # Check if merchant already exists
     result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
@@ -190,6 +193,7 @@ async def callback(
         merchant.trial_ends_at = datetime.now(UTC) + timedelta(days=14)
         if shop_name:
             merchant.shop_name = shop_name
+        merchant.currency = shop_currency
 
         logger.info(
             "merchant_reinstalled",
@@ -208,6 +212,7 @@ async def callback(
             bonus_cap_cents=5000,
             brand_color="#000000",
             shop_name=shop_name,
+            currency=shop_currency,
         )
         db.add(merchant)
 

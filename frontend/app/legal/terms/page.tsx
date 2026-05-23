@@ -116,7 +116,7 @@ export default function TermsOfService() {
 
           <h3>3.4 Currency and Pricing</h3>
           <p>
-            You acknowledge that Pleero operates in USD and subscription fees are charged in USD. You are responsible for ensuring your Shopify store's currency settings, pricing, and refund practices comply with local regulations (e.g., EU price transparency rules, Canadian dual-language requirements).
+            You acknowledge that Pleero subscription fees are charged in USD (as required by Shopify Partner billing). Store credit issued to your customers will be in your store's native currency. You are responsible for ensuring your Shopify store's currency settings, pricing, and refund practices comply with local regulations (e.g., EU price transparency rules, Canadian dual-language requirements).
           </p>
 
           <h3>3.5 Customer Consent</h3>
