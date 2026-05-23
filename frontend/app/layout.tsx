@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from 'next/font/google';
+import { GoogleAnalytics } from '@next/third-parties/google';
 import "./globals.css";
 import Providers from "@/components/Providers";
 
@@ -28,26 +29,29 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://pleero.app",
   },
+  // Explicit sizes ensure modern browsers prefer the PNG over the legacy favicon.ico.
+  // The middleware additionally rewrites /favicon.ico → /app-icon.png as a belt-and-suspenders fix.
+  icons: {
+    icon: [
+      { url: "/app-icon.png", type: "image/png", sizes: "32x32" },
+      { url: "/app-icon.png", type: "image/png", sizes: "16x16" },
+    ],
+    apple: [{ url: "/app-icon.png", type: "image/png", sizes: "180x180" }],
+    shortcut: [{ url: "/app-icon.png", type: "image/png" }],
+  },
+  // OG + Twitter images are generated dynamically by app/opengraph-image.tsx.
+  // No static fallback needed — Next.js injects the correct og:image URL automatically.
   openGraph: {
     type: "website",
     url: "https://pleero.app",
     title: "Pleero – Turn Refunds Into Store Credit",
-    description: "Stop losing revenue to refunds. Pleero automatically offers customers bonus store credit and converts 15–25% of refund requests into retained revenue.",
+    description: "Stop losing refund revenue. Pleero automatically offers customers bonus store credit and converts 15–25% of refund requests into retained revenue. $99/month flat.",
     siteName: "Pleero",
-    images: [
-      {
-        url: "/screenshots/02-merchant-dashboard.png",
-        width: 1920,
-        height: 1080,
-        alt: "Pleero merchant dashboard showing revenue retained",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Pleero – Turn Refunds Into Store Credit",
-    description: "Automatically convert Shopify refund requests into store credit offers. 15–25% conversion rate. $99/mo flat.",
-    images: ["/screenshots/02-merchant-dashboard.png"],
+    description: "Automatically convert Shopify refund requests into store credit offers. 15–25% conversion rate. $99/mo flat. 14-day free trial.",
   },
   robots: {
     index: true,
@@ -66,6 +70,9 @@ export default function RootLayout({
       <body>
         <Providers>{children}</Providers>
       </body>
+      {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+      )}
     </html>
   );
 }

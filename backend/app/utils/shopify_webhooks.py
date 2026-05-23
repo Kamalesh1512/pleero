@@ -80,6 +80,9 @@ class RefundWebhookData:
             f"gid://shopify/Customer/{raw_customer_id}" if raw_customer_id else None
         )
 
+        # Get order currency (ISO 4217 code, e.g. "USD", "GBP", "EUR")
+        self.currency_code = order.get("currency", "USD")
+
         # Get return reason (if available)
         # Note: Shopify doesn't always provide this in the webhook
         self.return_reason = None
@@ -120,10 +123,9 @@ def should_skip_offer(
 
     Business rules:
     1. Skip if return reason is defective/damaged/wrong
-    2. Skip if customer country is not US (Phase 1, hard rule #10)
-    3. Skip if merchant subscription is not ACTIVE or TRIAL
-    4. Skip if customer has no email
-    5. Skip if refund amount is $0
+    2. Skip if merchant subscription is not ACTIVE or TRIAL
+    3. Skip if customer has no email
+    4. Skip if refund amount is $0
 
     Args:
         webhook_data: Parsed webhook data
@@ -161,16 +163,6 @@ def should_skip_offer(
                 return_reason=webhook_data.return_reason,
             )
             return True, "defective_item"
-
-    # Check customer country (US-only in Phase 1, hard rule #10)
-    if webhook_data.customer_country and webhook_data.customer_country != "US":
-        logger.info(
-            "offer_skipped",
-            reason="non_us_customer",
-            refund_id=webhook_data.refund_id,
-            country=webhook_data.customer_country,
-        )
-        return True, "non_us_customer"
 
     # Check merchant subscription status
     if merchant_subscription_status not in [

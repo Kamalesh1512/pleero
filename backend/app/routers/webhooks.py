@@ -179,6 +179,7 @@ async def handle_refund_created(
             refund_amount_cents=webhook_data.refund_amount_cents,
             credit_amount_cents=credit_amount_cents,
             bonus_applied_cents=bonus_applied_cents,
+            currency_code=webhook_data.currency_code,
             status=OfferStatus.PENDING,
         )
         db.add(offer)

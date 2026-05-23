@@ -11,6 +11,21 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { getOffer, acceptOffer, declineOffer, formatCurrency, type Offer } from '@/lib/api';
 
+const CONFETTI_COLORS = [
+  '#FF6B6B', '#FF8C42', '#F9CA24', '#6BCB77', '#4D96FF',
+  '#C77DFF', '#FF6FC8', '#ffffff', '#2D7A4F', '#6FCF97',
+];
+
+async function fireConfetti() {
+  const confetti = (await import('canvas-confetti')).default;
+  const opts = { colors: CONFETTI_COLORS, gravity: 2.8, ticks: 140, startVelocity: 42, scalar: 1.1 };
+  confetti({ ...opts, particleCount: 120, spread: 75, origin: { y: 0.52 } });
+  setTimeout(() => {
+    confetti({ ...opts, particleCount: 60, angle: 58, spread: 60, origin: { x: 0, y: 0.58 } });
+    confetti({ ...opts, particleCount: 60, angle: 122, spread: 60, origin: { x: 1, y: 0.58 } });
+  }, 160);
+}
+
 export default function OfferPage() {
   const params = useParams();
   const token = params.token as string;
@@ -19,6 +34,7 @@ export default function OfferPage() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     async function loadOffer() {
@@ -41,7 +57,9 @@ export default function OfferPage() {
 
     try {
       const result = await acceptOffer(token);
+      setAccepted(true);
       setSuccess(result.message);
+      fireConfetti();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept offer');
     } finally {
@@ -134,39 +152,51 @@ export default function OfferPage() {
             maxWidth: '420px',
             background: 'var(--offer-card-bg)',
             border: '1px solid var(--offer-border)',
-            borderRadius: 'var(--radius-md)'
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
           }}
         >
           <div style={{ marginBottom: 'var(--space-4)' }}>
-            <svg
-              className="mx-auto"
-              width="64"
-              height="64"
-              fill="none"
-              stroke="var(--pleero-green)"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            {accepted ? (
+              <svg
+                className="mx-auto"
+                width="64"
+                height="64"
+                fill="none"
+                stroke="var(--pleero-green)"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg
+                className="mx-auto"
+                width="56"
+                height="56"
+                fill="none"
+                stroke="#9CA3AF"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
           </div>
           <h1 style={{
             fontFamily: 'var(--font-display)',
             fontSize: '22px',
-            fontWeight: 500,
+            fontWeight: accepted ? 600 : 500,
             color: 'var(--offer-text-primary)',
             marginBottom: 'var(--space-3)'
           }}>
-            All set!
+            {accepted ? 'Store credit applied!' : 'Refund request received.'}
           </h1>
           <p style={{
             fontFamily: 'var(--font-display)',
             fontSize: '14px',
-            color: 'var(--offer-text-secondary)'
+            color: 'var(--offer-text-secondary)',
+            lineHeight: 1.6,
           }}>
             {success}
           </p>

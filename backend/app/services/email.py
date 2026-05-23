@@ -20,9 +20,37 @@ from app.models.offer_event import OfferEvent, EventType
 logger = get_logger(__name__)
 
 
-def format_currency(cents: int) -> str:
-    """Format cents as dollars (e.g., 5000 -> $50)."""
-    return f"${cents / 100:.0f}"
+_CURRENCY_SYMBOLS: dict[str, str] = {
+    "USD": "$",
+    "CAD": "CA$",
+    "AUD": "A$",
+    "NZD": "NZ$",
+    "SGD": "S$",
+    "HKD": "HK$",
+    "GBP": "£",
+    "EUR": "€",
+    "JPY": "¥",
+    "CNY": "¥",
+    "KRW": "₩",
+    "INR": "₹",
+    "MXN": "MX$",
+    "BRL": "R$",
+    "CHF": "Fr ",
+    "SEK": "kr ",
+    "NOK": "kr ",
+    "DKK": "kr ",
+    "PLN": "zł ",
+    "CZK": "Kč ",
+    "ZAR": "R",
+    "AED": "AED ",
+    "SAR": "﷼ ",
+}
+
+
+def format_currency(cents: int, currency_code: str = "USD") -> str:
+    """Format cents as a currency string (e.g., 5000, 'GBP' -> '£50')."""
+    symbol = _CURRENCY_SYMBOLS.get(currency_code.upper(), f"{currency_code} ")
+    return f"{symbol}{cents / 100:.0f}"
 
 
 def build_offer_email_html(
@@ -34,6 +62,7 @@ def build_offer_email_html(
     refund_amount_cents: int,
     offer_url: str,
     decline_url: str,
+    currency_code: str = "USD",
 ) -> str:
     """
     Build offer email HTML.
@@ -54,8 +83,8 @@ def build_offer_email_html(
     Returns:
         HTML email content
     """
-    credit_amount = format_currency(credit_amount_cents)
-    refund_amount = format_currency(refund_amount_cents)
+    credit_amount = format_currency(credit_amount_cents, currency_code)
+    refund_amount = format_currency(refund_amount_cents, currency_code)
 
     # Sanitize all user-controlled inputs to prevent XSS
     safe_merchant_name = escape(merchant_name)
@@ -208,6 +237,7 @@ async def send_offer_email(
             refund_amount_cents=offer.refund_amount_cents,
             offer_url=offer_url,
             decline_url=decline_url,
+            currency_code=offer.currency_code,
         )
 
         # Send via Resend API

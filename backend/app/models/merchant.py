@@ -104,6 +104,13 @@ class Merchant(Base, TimestampMixin):
         nullable=True,
     )
 
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        default="USD",
+        nullable=False,
+        server_default="USD",
+    )
+
     trial_ends_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
