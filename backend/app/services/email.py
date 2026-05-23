@@ -21,11 +21,29 @@ logger = get_logger(__name__)
 
 
 _CURRENCY_SYMBOLS: dict[str, str] = {
-    "USD": "$", "CAD": "CA$", "AUD": "A$", "NZD": "NZ$", "SGD": "S$",
-    "HKD": "HK$", "GBP": "£", "EUR": "€", "JPY": "¥", "CNY": "¥",
-    "KRW": "₩", "INR": "₹", "MXN": "MX$", "BRL": "R$", "CHF": "Fr ",
-    "SEK": "kr ", "NOK": "kr ", "DKK": "kr ", "PLN": "zł ", "CZK": "Kč ",
-    "ZAR": "R", "AED": "AED ", "SAR": "﷼ ",
+    "USD": "$",
+    "CAD": "CA$",
+    "AUD": "A$",
+    "NZD": "NZ$",
+    "SGD": "S$",
+    "HKD": "HK$",
+    "GBP": "£",
+    "EUR": "€",
+    "JPY": "¥",
+    "CNY": "¥",
+    "KRW": "₩",
+    "INR": "₹",
+    "MXN": "MX$",
+    "BRL": "R$",
+    "CHF": "Fr ",
+    "SEK": "kr ",
+    "NOK": "kr ",
+    "DKK": "kr ",
+    "PLN": "zł ",
+    "CZK": "Kč ",
+    "ZAR": "R",
+    "AED": "AED ",
+    "SAR": "﷼ ",
 }
 
 
