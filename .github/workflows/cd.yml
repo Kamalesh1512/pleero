@@ -237,7 +237,8 @@ jobs:
         run: npm install -g @shopify/cli@latest
 
       - name: Deploy app configuration to Shopify
-        run: shopify app deploy --force
+        # GitHub Actions sets CI=true automatically — Shopify CLI skips interactive prompts in CI mode
+        run: shopify app deploy
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
 
