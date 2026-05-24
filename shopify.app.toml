@@ -14,9 +14,7 @@ scopes = "write_orders,write_store_credit_account_transactions"
 
 [auth]
 redirect_urls = [
-  "https://api.pleero.app/auth/callback",
-  "https://api-dev.pleero.app/auth/callback",
-  "https://api-dev.pleero.app/auth/shopify/callback"
+  "https://api.pleero.app/auth/callback"
 ]
 
 [webhooks]
