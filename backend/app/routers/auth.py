@@ -78,7 +78,6 @@ async def install(
     # See: https://shopify.dev/docs/api/usage/access-scopes
     scopes = [
         "write_orders",  # Covers refunds AND refund webhook subscriptions
-        "write_customers",  # Customer management
         "write_store_credit_account_transactions",  # Required for store credit issuance
     ]
 

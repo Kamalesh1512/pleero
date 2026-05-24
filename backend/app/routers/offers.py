@@ -252,7 +252,6 @@ async def accept_offer(
             event_type=EventType.CREDIT_ISSUED,
             metadata={
                 "amount_cents": offer.credit_amount_cents,
-                "customer_email": offer.customer_email,
             },
         )
         db.add(event_credit_issued)
@@ -262,7 +261,6 @@ async def accept_offer(
         logger.info(
             "offer_accepted",
             offer_id=str(offer.id),
-            customer_email=offer.customer_email,
             credit_amount_cents=offer.credit_amount_cents,
         )
 
@@ -350,7 +348,6 @@ async def decline_offer(
     logger.info(
         "offer_declined",
         offer_id=str(offer.id),
-        customer_email=offer.customer_email,
     )
 
     return OfferActionResponse(

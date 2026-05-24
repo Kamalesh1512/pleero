@@ -1,16 +1,16 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 name = "pleero"
-client_id = "ef7d7dc50496769b50b10e4812a05668"
+client_id = "1a1d6eff5b104d69eae630f9a43d8779"
 application_url = "https://pleero.app"
 embedded = true
 
 [access_scopes]
 # See: https://shopify.dev/docs/api/usage/access-scopes
 # write_orders: Covers refunds AND webhook subscriptions
-# write_customers: Customer management
 # write_store_credit_account_transactions: Required for issuing store credit via GraphQL
-scopes = "write_orders,write_customers,write_store_credit_account_transactions"
+# Note: write_customers intentionally omitted — customer GID comes from refund webhook payload
+scopes = "write_orders,write_store_credit_account_transactions"
 
 [auth]
 redirect_urls = [
@@ -31,19 +31,10 @@ topics = ["app/uninstalled"]
 uri = "https://api.pleero.app/webhooks/app/uninstalled"
 
 # Mandatory compliance webhooks — required for Shopify App Store approval.
-# Shopify sends these for GDPR / CCPA / privacy law compliance.
-# All three must return 200 and verify HMAC.
+# Must use compliance_topics (not topics). Requires Protected Customer Data Access.
 [[webhooks.subscriptions]]
-topics = ["customers/data_request"]
-uri = "https://api.pleero.app/webhooks/customers/data_request"
-
-[[webhooks.subscriptions]]
-topics = ["customers/redact"]
-uri = "https://api.pleero.app/webhooks/customers/redact"
-
-[[webhooks.subscriptions]]
-topics = ["shop/redact"]
-uri = "https://api.pleero.app/webhooks/shop/redact"
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://api.pleero.app/webhooks/compliance"
 
 [pos]
 embedded = false
@@ -51,7 +42,6 @@ embedded = false
 [build]
 automatically_update_urls_on_dev = true
 dev_store_url = "e-comm-dev-store.myshopify.com"
-include_config_on_deploy = true
 
 [build.dev]
 watch = ["frontend/**/*"]

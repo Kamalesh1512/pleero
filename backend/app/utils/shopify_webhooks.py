@@ -143,6 +143,16 @@ def should_skip_offer(
         )
         return True, "no_email"
 
+    # Require customer GID — guest checkouts have no registered account
+    # and store credit cannot be issued without it.
+    if not webhook_data.customer_shopify_gid:
+        logger.info(
+            "offer_skipped",
+            reason="no_customer_gid",
+            refund_id=webhook_data.refund_id,
+        )
+        return True, "no_customer_gid"
+
     # Check refund amount
     if webhook_data.refund_amount_cents <= 0:
         logger.info(

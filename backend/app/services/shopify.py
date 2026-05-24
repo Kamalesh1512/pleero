@@ -89,16 +89,9 @@ async def issue_store_credit(
     client, shop_domain, _ = client_data
 
     try:
-        # Use pre-known GID from webhook payload to avoid protected customers query.
-        # Fall back to email lookup only if GID wasn't stored (legacy offers).
-        if customer_shopify_id:
-            customer_id = customer_shopify_id
-        else:
-            customer_id = await get_customer_id_by_email(
-                client,
-                shop_domain,
-                customer_email,
-            )
+        # Always use the Shopify GID from the webhook payload.
+        # We do not query the Customers API (no write_customers scope needed).
+        customer_id = customer_shopify_id
 
         if not customer_id:
             logger.error(
@@ -182,7 +175,6 @@ async def issue_store_credit(
         logger.info(
             "store_credit_issued",
             merchant_id=str(merchant_id),
-            customer_email=customer_email,
             amount_cents=amount_cents,
             transaction_id=transaction["id"],
         )
@@ -209,78 +201,6 @@ async def issue_store_credit(
 
     finally:
         await client.aclose()
-
-
-async def get_customer_id_by_email(
-    client: httpx.AsyncClient,
-    shop_domain: str,
-    email: str,
-) -> str | None:
-    """
-    Get Shopify customer ID by email address.
-
-    Args:
-        client: Authenticated Shopify API client
-        shop_domain: Shop domain
-        email: Customer email
-
-    Returns:
-        Customer GID or None if not found
-    """
-    try:
-        query = """
-        query getCustomer($email: String!) {
-            customers(first: 1, query: $email) {
-                edges {
-                    node {
-                        id
-                        email
-                        firstName
-                    }
-                }
-            }
-        }
-        """
-
-        variables = {"email": f"email:{email}"}
-
-        url = f"https://{shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
-
-        response = await client.post(
-            url,
-            json={"query": query, "variables": variables},
-        )
-
-        response.raise_for_status()
-        data = response.json()
-
-        # data["data"] can be None when GraphQL returns errors — use `or {}` not `, {}`
-        gql_data = data.get("data") or {}
-        edges = gql_data.get("customers", {}).get("edges", [])
-
-        if "errors" in data:
-            logger.error(
-                "get_customer_id_graphql_error",
-                email=email,
-                errors=data["errors"],
-            )
-            return None
-
-        if not edges:
-            logger.warning("get_customer_id_not_found", email=email)
-            return None
-
-        customer_id: str = edges[0]["node"]["id"]
-        return customer_id
-
-    except Exception as e:
-        logger.error(
-            "get_customer_id_error",
-            email=email,
-            error=str(e),
-            exc_info=True,
-        )
-        return None
 
 
 async def cancel_refund(
@@ -327,43 +247,6 @@ async def cancel_refund(
         # TODO: Investigate if we can use refund transactions API to reverse
         # For now, return True as this is not critical for MVP
         return True
-
-    finally:
-        await client.aclose()
-
-
-async def get_customer_by_email(
-    db: AsyncSession,
-    merchant_id: UUID,
-    email: str,
-) -> dict[str, str] | None:
-    """
-    Get customer information by email.
-
-    Args:
-        db: Database session
-        merchant_id: Merchant ID
-        email: Customer email
-
-    Returns:
-        Dict with customer data or None if not found
-    """
-    client_data = await get_shopify_client(db, merchant_id)
-    if not client_data:
-        return None
-
-    client, shop_domain, _ = client_data
-
-    try:
-        customer_id = await get_customer_id_by_email(client, shop_domain, email)
-
-        if not customer_id:
-            return None
-
-        return {
-            "id": customer_id,
-            "email": email,
-        }
 
     finally:
         await client.aclose()
