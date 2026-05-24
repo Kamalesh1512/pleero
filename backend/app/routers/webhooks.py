@@ -13,7 +13,13 @@ from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.models.offer import Offer, OfferStatus
 from app.models.offer_event import EventType, OfferEvent
-from app.schemas.webhook import AppUninstalledPayload, RefundWebhookPayload
+from app.schemas.webhook import (
+    AppUninstalledPayload,
+    CustomersDataRequestPayload,
+    CustomersRedactPayload,
+    RefundWebhookPayload,
+    ShopRedactPayload,
+)
 from app.utils.shopify_webhooks import (
     calculate_bonus,
     parse_refund_webhook,
@@ -303,3 +309,149 @@ async def handle_app_uninstalled(
             str(e) if settings.APP_ENV == "development" else "Internal processing error"
         )
         return {"status": "error", "message": error_message}
+
+
+# ── Mandatory compliance webhooks ──────────────────────────────────────────────
+# Required by Shopify for any app that stores customer PII.
+# Shopify will fail the app review automated check if these are missing.
+# Docs: https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance
+
+
+@router.post("/customers/data_request")
+async def handle_customers_data_request(
+    request: Request,
+    payload: CustomersDataRequestPayload,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    customers/data_request — customer asked what data we hold about them.
+
+    We store: customer_email, customer_first_name in the offers table.
+    Acknowledging receipt satisfies Shopify's requirement. The merchant
+    is responsible for responding to the customer within 30 days.
+    """
+    logger.info(
+        "compliance_data_request_received",
+        shop_domain=payload.shop_domain,
+        shop_id=payload.shop_id,
+        customer_id=payload.customer.id,
+        customer_email=payload.customer.email,
+        orders_requested=payload.orders_requested,
+    )
+    return {"status": "acknowledged"}
+
+
+@router.post("/customers/redact")
+async def handle_customers_redact(
+    request: Request,
+    payload: CustomersRedactPayload,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    customers/redact — anonymise all PII for this customer in our offers table.
+
+    Keeps financial records (amounts, status, timestamps) intact for merchant
+    revenue reporting but scrubs personal identifiers. Must complete within 30 days.
+    """
+    try:
+        from sqlalchemy import update
+
+        customer_email = payload.customer.email
+        if not customer_email:
+            logger.warning(
+                "compliance_redact_no_email",
+                shop_domain=payload.shop_domain,
+                customer_id=payload.customer.id,
+            )
+            return {"status": "skipped", "reason": "no_email_provided"}
+
+        redacted_email = f"redacted_{payload.customer.id}@redacted.invalid"
+        result = await db.execute(
+            update(Offer)
+            .where(Offer.customer_email == customer_email)
+            .values(
+                customer_email=redacted_email,
+                customer_first_name="Redacted",
+                customer_shopify_id=None,
+            )
+        )
+        await db.commit()
+
+        logger.info(
+            "compliance_customer_redacted",
+            shop_domain=payload.shop_domain,
+            customer_id=payload.customer.id,
+            rows_updated=result.rowcount,
+        )
+        return {"status": "success"}
+
+    except Exception as e:
+        logger.error(
+            "compliance_redact_error",
+            shop_domain=payload.shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}
+
+
+@router.post("/shop/redact")
+async def handle_shop_redact(
+    request: Request,
+    payload: ShopRedactPayload,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    shop/redact — triggered 48 h after app uninstall.
+    Deletes all offers and the merchant row for this shop.
+    """
+    try:
+        from sqlalchemy import delete
+
+        from app.models.offer_event import OfferEvent
+
+        result = await db.execute(
+            select(Merchant).where(Merchant.shop_domain == payload.shop_domain)
+        )
+        merchant = result.scalar_one_or_none()
+
+        if not merchant:
+            logger.info(
+                "compliance_shop_redact_no_merchant",
+                shop_domain=payload.shop_domain,
+            )
+            return {"status": "skipped", "reason": "merchant_not_found"}
+
+        offer_ids_result = await db.execute(
+            select(Offer.id).where(Offer.merchant_id == merchant.id)
+        )
+        offer_ids = [row[0] for row in offer_ids_result.fetchall()]
+
+        if offer_ids:
+            await db.execute(
+                delete(OfferEvent).where(OfferEvent.offer_id.in_(offer_ids))
+            )
+            await db.execute(delete(Offer).where(Offer.merchant_id == merchant.id))
+
+        await db.delete(merchant)
+        await db.commit()
+
+        logger.info(
+            "compliance_shop_redacted",
+            shop_domain=payload.shop_domain,
+            shop_id=payload.shop_id,
+            offers_deleted=len(offer_ids),
+        )
+        return {"status": "success"}
+
+    except Exception as e:
+        logger.error(
+            "compliance_shop_redact_error",
+            shop_domain=payload.shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}
