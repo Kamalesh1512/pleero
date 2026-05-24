@@ -14,6 +14,13 @@ from structlog.types import Processor
 from app.core.config import settings
 
 
+class _HealthCheckFilter(logging.Filter):
+    """Drop uvicorn access log lines for /health to reduce log noise."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/health" not in record.getMessage()
+
+
 def configure_logging() -> None:
     """
     Configure structlog for the application.
@@ -62,6 +69,9 @@ def configure_logging() -> None:
         stream=sys.stdout,
         level=logging.INFO if settings.APP_ENV == "production" else logging.DEBUG,
     )
+
+    # Suppress /health from uvicorn access logs (Caddy probes every 10s + Docker every 30s)
+    logging.getLogger("uvicorn.access").addFilter(_HealthCheckFilter())
 
 
 def get_logger(name: str | None = None) -> Any:

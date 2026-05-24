@@ -8,7 +8,7 @@ const steps = [
     title: 'Customer requests a refund',
     description:
       'The moment a refund is created in your Shopify store, Pleero picks it up automatically. No monitoring, no notifications needed on your end.',
-    screenshotSrc: '/screenshots/04-offer-email.png',
+    screenshotSrc: '/screenshots/05-email.png',
     screenshotAlt: 'Pleero offer email sent to customer',
     caption: 'Branded offer email — sent in seconds',
     isMobile: false,
@@ -18,7 +18,7 @@ const steps = [
     title: 'Customer gets a branded offer — your logo, your colors',
     description:
       'The customer opens a clean, mobile-first offer page showing two options: take bonus store credit now, or wait 5–7 days for their cash back. About 1 in 5 choose the credit.',
-    screenshotSrc: '/screenshots/01-customer-offer-mobile.png',
+    screenshotSrc: '/screenshots/03-offer.png',
     screenshotAlt: 'Mobile offer page shown to customer',
     caption: 'One-tap acceptance on mobile',
     isMobile: true,
@@ -28,7 +28,7 @@ const steps = [
     title: 'Revenue retained. Dashboard updated.',
     description:
       'If the customer accepts, store credit is issued in their Shopify account within 60 seconds. Your dashboard shows offers sent, conversion rate, and total revenue retained this month.',
-    screenshotSrc: '/screenshots/02-merchant-dashboard.png',
+    screenshotSrc: '/screenshots/02-dashboard.png',
     screenshotAlt: 'Pleero merchant dashboard showing revenue retained',
     caption: 'Track every dollar retained',
     isMobile: false,
