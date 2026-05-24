@@ -455,3 +455,128 @@ async def handle_shop_redact(
             exc_info=True,
         )
         return {"status": "error", "message": "Internal processing error"}
+
+
+# ── Combined compliance endpoint (required by shopify.app.toml compliance_topics) ─
+# Shopify sends all three compliance topics to this single URI.
+# Dispatches to the individual handlers above based on X-Shopify-Topic header.
+
+
+@router.post("/compliance")
+async def handle_compliance(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    Combined compliance webhook handler for customers/data_request,
+    customers/redact, and shop/redact.
+
+    shopify.app.toml compliance_topics requires a single URI for all three.
+    Dispatches based on X-Shopify-Topic header.
+    """
+    topic = request.headers.get("x-shopify-topic", "")
+    body_json = await request.json()
+
+    if topic == "customers/data_request":
+        payload = CustomersDataRequestPayload(**body_json)
+        logger.info(
+            "compliance_data_request_received",
+            shop_domain=payload.shop_domain,
+            customer_id=payload.customer.id,
+        )
+        return {"status": "acknowledged"}
+
+    if topic == "customers/redact":
+        payload = CustomersRedactPayload(**body_json)
+        return await _redact_customer(db, payload)
+
+    if topic == "shop/redact":
+        payload = ShopRedactPayload(**body_json)
+        return await _redact_shop(db, payload)
+
+    logger.warning("compliance_unknown_topic", topic=topic)
+    return {"status": "ignored", "topic": topic}
+
+
+async def _redact_customer(
+    db: AsyncSession, payload: CustomersRedactPayload
+) -> dict[str, str]:
+    """Shared logic extracted from handle_customers_redact."""
+    try:
+        from sqlalchemy import update
+
+        customer_email = payload.customer.email
+        if not customer_email:
+            return {"status": "skipped", "reason": "no_email_provided"}
+
+        redacted_email = f"redacted_{payload.customer.id}@redacted.invalid"
+        result = await db.execute(
+            update(Offer)
+            .where(Offer.customer_email == customer_email)
+            .values(
+                customer_email=redacted_email,
+                customer_first_name="Redacted",
+                customer_shopify_id=None,
+            )
+        )
+        await db.commit()
+        logger.info(
+            "compliance_customer_redacted",
+            shop_domain=payload.shop_domain,
+            customer_id=payload.customer.id,
+            rows_updated=result.rowcount,
+        )
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(
+            "compliance_redact_error",
+            shop_domain=payload.shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}
+
+
+async def _redact_shop(db: AsyncSession, payload: ShopRedactPayload) -> dict[str, str]:
+    """Shared logic extracted from handle_shop_redact."""
+    try:
+        from sqlalchemy import delete
+
+        result = await db.execute(
+            select(Merchant).where(Merchant.shop_domain == payload.shop_domain)
+        )
+        merchant = result.scalar_one_or_none()
+
+        if not merchant:
+            return {"status": "skipped", "reason": "merchant_not_found"}
+
+        offer_ids_result = await db.execute(
+            select(Offer.id).where(Offer.merchant_id == merchant.id)
+        )
+        offer_ids = [row[0] for row in offer_ids_result.fetchall()]
+
+        if offer_ids:
+            await db.execute(
+                delete(OfferEvent).where(OfferEvent.offer_id.in_(offer_ids))
+            )
+            await db.execute(delete(Offer).where(Offer.merchant_id == merchant.id))
+
+        await db.delete(merchant)
+        await db.commit()
+
+        logger.info(
+            "compliance_shop_redacted",
+            shop_domain=payload.shop_domain,
+            shop_id=payload.shop_id,
+            offers_deleted=len(offer_ids),
+        )
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(
+            "compliance_shop_redact_error",
+            shop_domain=payload.shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}

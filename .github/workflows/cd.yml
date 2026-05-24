@@ -157,8 +157,8 @@ jobs:
             # Run database migrations
             docker compose -f docker-compose.production.yml run --rm backend alembic upgrade head
 
-            # Deploy with zero-downtime (start backend and caddy)
-            docker compose -f docker-compose.production.yml up -d backend caddy
+            # Deploy with force-recreate to ensure new image is used
+            docker compose -f docker-compose.production.yml up -d --force-recreate backend caddy
 
             # Verify containers are running
             echo "🔍 Checking container status..."
@@ -208,6 +208,38 @@ jobs:
           done
           echo "❌ Backend health check failed after $MAX_RETRIES attempts"
           exit 1
+
+  # ===========================================================================
+  # SYNC SHOPIFY APP CONFIGURATION
+  # Must run AFTER deploy-backend so webhook endpoints are live when registered.
+  # Runs in parallel with deploy-frontend.
+  # Requires secret: SHOPIFY_CLI_PARTNERS_TOKEN
+  #   → Partner Dashboard → Settings → Partner API clients → Create API client
+  # ===========================================================================
+  deploy-shopify-config:
+    name: Deploy Shopify App Config
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - deploy-backend
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli@latest
+
+      - name: Deploy app configuration to Shopify
+        run: shopify app deploy --force
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
@@ -281,19 +313,26 @@ jobs:
     needs:
       - version
       - deploy-backend
+      - deploy-shopify-config
       - deploy-frontend
     if: always()
     steps:
       - name: Check deployment status
         run: |
-          if [ "${{ needs.deploy-backend.result }}" = "success" ] && [ "${{ needs.deploy-frontend.result }}" = "success" ]; then
+          BACKEND="${{ needs.deploy-backend.result }}"
+          SHOPIFY="${{ needs.deploy-shopify-config.result }}"
+          FRONTEND="${{ needs.deploy-frontend.result }}"
+
+          if [ "$BACKEND" = "success" ] && [ "$FRONTEND" = "success" ] && [ "$SHOPIFY" = "success" ]; then
             echo "🎉 Deployment of version ${{ needs.version.outputs.version }} completed successfully!"
-            echo "Backend: https://api.pleero.app"
-            echo "Frontend: https://pleero.app"
+            echo "Backend:        https://api.pleero.app"
+            echo "Frontend:       https://pleero.app"
+            echo "Shopify config: synced"
             exit 0
           else
             echo "❌ Deployment failed"
-            echo "Backend: ${{ needs.deploy-backend.result }}"
-            echo "Frontend: ${{ needs.deploy-frontend.result }}"
+            echo "Backend:        $BACKEND"
+            echo "Shopify config: $SHOPIFY"
+            echo "Frontend:       $FRONTEND"
             exit 1
           fi

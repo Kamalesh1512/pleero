@@ -43,6 +43,7 @@ class Order(BaseModel):
     id: int
     name: str
     customer: Customer | None = None
+    currency: str = "USD"
 
 
 class RefundWebhookPayload(BaseModel):
