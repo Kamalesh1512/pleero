@@ -76,3 +76,50 @@ class AppUninstalledPayload(BaseModel):
 
     id: int  # App installation ID
     name: str | None = None
+
+
+# ── Compliance webhook payloads ────────────────────────────────────────────────
+
+
+class ComplianceCustomer(BaseModel):
+    """Customer identifier block inside compliance payloads."""
+
+    id: int
+    email: str | None = None
+    phone: str | None = None
+
+
+class CustomersDataRequestPayload(BaseModel):
+    """
+    customers/data_request — customer asked the merchant what data the app holds.
+    We must acknowledge receipt within 30 days (no data needs to be returned
+    in the webhook response itself).
+    """
+
+    shop_id: int
+    shop_domain: str
+    customer: ComplianceCustomer
+    orders_requested: list[int] = Field(default_factory=list)
+    data_request: dict[str, Any] | None = None
+
+
+class CustomersRedactPayload(BaseModel):
+    """
+    customers/redact — customer or merchant requested PII deletion.
+    We must anonymise all customer fields within 30 days.
+    """
+
+    shop_id: int
+    shop_domain: str
+    customer: ComplianceCustomer
+    orders_to_redact: list[int] = Field(default_factory=list)
+
+
+class ShopRedactPayload(BaseModel):
+    """
+    shop/redact — triggered 48 h after app uninstall.
+    We must delete all data for the shop.
+    """
+
+    shop_id: int
+    shop_domain: str

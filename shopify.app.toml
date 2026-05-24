@@ -30,6 +30,21 @@ uri = "https://api.pleero.app/webhooks/refunds/create"
 topics = ["app/uninstalled"]
 uri = "https://api.pleero.app/webhooks/app/uninstalled"
 
+# Mandatory compliance webhooks — required for Shopify App Store approval.
+# Shopify sends these for GDPR / CCPA / privacy law compliance.
+# All three must return 200 and verify HMAC.
+[[webhooks.subscriptions]]
+topics = ["customers/data_request"]
+uri = "https://api.pleero.app/webhooks/customers/data_request"
+
+[[webhooks.subscriptions]]
+topics = ["customers/redact"]
+uri = "https://api.pleero.app/webhooks/customers/redact"
+
+[[webhooks.subscriptions]]
+topics = ["shop/redact"]
+uri = "https://api.pleero.app/webhooks/shop/redact"
+
 [pos]
 embedded = false
 
