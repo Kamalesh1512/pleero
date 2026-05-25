@@ -3,9 +3,31 @@
  * Handles communication with backend API.
  */
 
-import { getSessionToken as getAppBridgeSessionToken } from './shopify-app-bridge';
+import { getSessionToken as getAppBridgeSessionToken, invalidateStoredToken } from './shopify-app-bridge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+async function fetchWithAuth(
+  path: string,
+  sessionToken: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = {
+    Authorization: `Bearer ${sessionToken}`,
+    'Content-Type': 'application/json',
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  if (res.status !== 401) return res;
+
+  // Token rejected — invalidate cache, get a fresh one, retry once
+  invalidateStoredToken();
+  const freshToken = await getAppBridgeSessionToken();
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...headers, Authorization: `Bearer ${freshToken}` },
+  });
+}
 
 export interface DashboardMetrics {
   offers_sent: number;
@@ -65,17 +87,8 @@ export async function getSessionToken(): Promise<string> {
  * Fetch dashboard metrics for current month.
  */
 export async function getDashboardMetrics(sessionToken: string): Promise<DashboardMetrics> {
-  const response = await fetch(`${API_BASE_URL}/api/dashboard/metrics`, {
-    headers: {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch metrics: ${response.statusText}`);
-  }
-
+  const response = await fetchWithAuth('/api/dashboard/metrics', sessionToken);
+  if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.statusText}`);
   return response.json();
 }
 
@@ -83,17 +96,8 @@ export async function getDashboardMetrics(sessionToken: string): Promise<Dashboa
  * Get merchant settings.
  */
 export async function getMerchantSettings(sessionToken: string): Promise<Merchant> {
-  const response = await fetch(`${API_BASE_URL}/api/merchants/me`, {
-    headers: {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch settings: ${response.statusText}`);
-  }
-
+  const response = await fetchWithAuth('/api/merchants/me', sessionToken);
+  if (!response.ok) throw new Error(`Failed to fetch settings: ${response.statusText}`);
   return response.json();
 }
 
@@ -104,33 +108,20 @@ export async function updateMerchantSettings(
   sessionToken: string,
   data: MerchantUpdate
 ): Promise<Merchant> {
-  const response = await fetch(`${API_BASE_URL}/api/merchants/me`, {
+  const response = await fetchWithAuth('/api/merchants/me', sessionToken, {
     method: 'PATCH',
-    headers: {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(data),
   });
-
   if (!response.ok) {
     const body = await response.text().catch(() => response.statusText);
     throw new Error(`Failed to save settings (${response.status}): ${body}`);
   }
-
   return response.json();
 }
 
 export async function getShopLogo(sessionToken: string): Promise<string | null> {
-  const response = await fetch(`${API_BASE_URL}/api/shop/logo`, {
-    headers: {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
+  const response = await fetchWithAuth('/api/shop/logo', sessionToken);
   if (!response.ok) return null;
-
   const data = await response.json();
   return data.logo_url ?? null;
 }

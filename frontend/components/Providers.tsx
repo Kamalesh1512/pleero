@@ -3,7 +3,7 @@
 import { AppProvider } from '@shopify/polaris';
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect } from 'react';
-import { initAppBridge, storeInitialToken } from '@/lib/shopify-app-bridge';
+import { initAppBridge, storeInitialToken, storeHost } from '@/lib/shopify-app-bridge';
 
 export default function Providers({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -25,6 +25,8 @@ export default function Providers({ children }: PropsWithChildren) {
 
     const host = params.get('host');
     if (!host) return;
+
+    storeHost(host);
 
     try {
       initAppBridge(apiKey, host);
