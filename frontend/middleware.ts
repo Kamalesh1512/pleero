@@ -17,6 +17,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL('/app-icon.png', request.url));
   }
 
+  // Initial install: Shopify hits application_url with shop + hmac but NO host.
+  // Must redirect to backend OAuth — the frontend cannot start the token exchange.
+  if (pathname === '/' && searchParams.get('shop') && searchParams.get('hmac') && !searchParams.get('host')) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pleero.app';
+    const installUrl = new URL(`${apiUrl}/auth/install`);
+    searchParams.forEach((value, key) => installUrl.searchParams.set(key, value));
+    return NextResponse.redirect(installUrl.toString());
+  }
+
+  // Embedded open: Shopify Admin loads the app with shop + host.
   if (pathname === '/' && searchParams.get('shop') && searchParams.get('host')) {
     const dest = request.nextUrl.clone();
     dest.pathname = '/dashboard';
