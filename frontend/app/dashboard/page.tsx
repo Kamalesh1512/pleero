@@ -207,7 +207,7 @@ export default function DashboardPage() {
               {/* Metrics Cards Row - Custom styled with dark tokens */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
                 gap: 'var(--space-5)'
               }}>
                 <MetricCard
