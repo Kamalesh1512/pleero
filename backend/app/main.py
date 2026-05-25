@@ -54,28 +54,17 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS
-# Build allowed origins list based on environment
-allowed_origins = [
-    settings.FRONTEND_URL,
-    "https://admin.shopify.com",  # Shopify admin
-]
-
-# Add development origins only in development
-if settings.APP_ENV == "development":
-    allowed_origins.extend(
-        [
-            "http://localhost:3000",
-            "https://dev.pleero.app",
-        ]
-    )
-
+# Shopify embedded apps can be loaded from admin.shopify.com, *.myshopify.com,
+# or the app's own Vercel/custom domain depending on context. Since all protected
+# routes are secured by JWT session token validation (get_current_shop), CORS
+# acts as a secondary browser-side guard only — we allow all HTTPS origins.
+# Bearer token auth does not use cookies, so allow_credentials stays False.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-    allow_origin_regex=r"https://.*\.myshopify\.com",  # Allow Shopify embedded app
+    allow_headers=["*"],
 )
 
 # Register routers
