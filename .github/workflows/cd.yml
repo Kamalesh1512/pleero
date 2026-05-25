@@ -145,20 +145,16 @@ jobs:
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           GITHUB_REPOSITORY=${{ needs.version.outputs.repo_lowercase }}
-          IMAGE_TAG=${{ needs.version.outputs.sha_short }}
           ENVEOF
 
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull latest images
-            docker compose -f docker-compose.production.yml pull backend
+            # Run database migrations (uses latest image pulled inline by --pull always)
+            docker compose -f docker-compose.production.yml run --rm --pull always backend alembic upgrade head
 
-            # Run database migrations
-            docker compose -f docker-compose.production.yml run --rm backend alembic upgrade head
-
-            # Deploy with force-recreate to ensure new image is used
-            docker compose -f docker-compose.production.yml up -d --force-recreate backend caddy
+            # Deploy: pull latest image and force-recreate containers atomically
+            docker compose -f docker-compose.production.yml up -d --pull always --force-recreate backend caddy
 
             # Verify containers are running
             echo "🔍 Checking container status..."
