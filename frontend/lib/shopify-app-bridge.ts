@@ -22,6 +22,25 @@ export function storeInitialToken(token: string) {
   } catch { /* sessionStorage unavailable */ }
 }
 
+export function invalidateStoredToken(): void {
+  try {
+    sessionStorage.removeItem('_pleero_id_token');
+    sessionStorage.removeItem('_pleero_id_token_ts');
+  } catch { /* */ }
+}
+
+// ─── Stored host (from Shopify's host URL param) ──────────────────────────────
+// The host param disappears from the URL after navigation. Persist it in
+// sessionStorage so the npm App Bridge fallback can init on any page.
+
+export function storeHost(host: string): void {
+  try { sessionStorage.setItem('_pleero_host', host); } catch { /* */ }
+}
+
+function getStoredHost(): string | null {
+  try { return sessionStorage.getItem('_pleero_host'); } catch { return null; }
+}
+
 function getStoredInitialToken(): string | null {
   try {
     const token = sessionStorage.getItem('_pleero_id_token');
@@ -56,7 +75,7 @@ async function waitForShopifyGlobal(maxWaitMs = 3000): Promise<ShopifyGlobal | n
 function tryLazyInit() {
   if (app || typeof window === 'undefined') return;
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
-  const host = new URLSearchParams(window.location.search).get('host');
+  const host = new URLSearchParams(window.location.search).get('host') ?? getStoredHost();
   if (apiKey && host && apiKey !== 'your_shopify_api_key_here') {
     try {
       initAppBridge(apiKey, host);
