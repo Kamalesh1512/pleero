@@ -238,6 +238,7 @@ async def callback(
         webhooks_registered="via_toml",
     )
 
-    # Redirect to frontend dashboard
-    dashboard_url = f"{settings.FRONTEND_URL}/?shop={shop}"
-    return RedirectResponse(url=dashboard_url)
+    # Redirect to the app inside Shopify Admin.
+    # Going to /admin/apps lets Shopify Admin re-open the embedded app with
+    # a fresh host + id_token — avoids INVALID_ORIGIN on the npm App Bridge.
+    return RedirectResponse(url=f"https://{shop}/admin/apps")
