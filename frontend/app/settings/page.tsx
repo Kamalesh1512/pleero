@@ -43,7 +43,7 @@ export default function Settings() {
   // Fetch a fresh token on mount and every 55 s (tokens expire in ~1 min)
   useEffect(() => {
     refreshToken();
-    const interval = setInterval(refreshToken, 55_000);
+    const interval = setInterval(refreshToken, 45_000);
     return () => clearInterval(interval);
   }, [refreshToken]);
 
