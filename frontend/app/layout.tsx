@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from 'next/font/google';
 import { GoogleAnalytics } from '@next/third-parties/google';
-import Script from 'next/script';
 import "./globals.css";
 import Providers from "@/components/Providers";
 
-// Using Inter as Geist alternative (similar geometric sans-serif)
-// TODO: Replace with Geist font when available in next/font/google or via local font files
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-display',
@@ -33,8 +30,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://pleero.app",
   },
-  // Explicit sizes ensure modern browsers prefer the PNG over the legacy favicon.ico.
-  // The middleware additionally rewrites /favicon.ico → /app-icon.png as a belt-and-suspenders fix.
   icons: {
     icon: [
       { url: "/app-icon.png", type: "image/png", sizes: "32x32" },
@@ -43,8 +38,6 @@ export const metadata: Metadata = {
     apple: [{ url: "/app-icon.png", type: "image/png", sizes: "180x180" }],
     shortcut: [{ url: "/app-icon.png", type: "image/png" }],
   },
-  // OG + Twitter images are generated dynamically by app/opengraph-image.tsx.
-  // No static fallback needed — Next.js injects the correct og:image URL automatically.
   openGraph: {
     type: "website",
     url: "https://pleero.app",
@@ -71,15 +64,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
+      <head>
+        {/* Shopify App Bridge: meta tag must come before the script.
+            Plain <script> (no async/defer) required — App Bridge aborts if async is present. */}
+        <meta name="shopify-api-key" content={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ?? ''} />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+      </head>
       <body>
-        {/* Required by Shopify embedded app checks: load App Bridge from CDN before any React code runs.
-            This makes window.shopify available synchronously and satisfies the "App Bridge CDN script"
-            and "session token" checks in the Shopify Partner Dashboard submission flow. */}
-        <Script
-          id="shopify-app-bridge"
-          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
-          strategy="beforeInteractive"
-        />
         <Providers>{children}</Providers>
       </body>
       {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
