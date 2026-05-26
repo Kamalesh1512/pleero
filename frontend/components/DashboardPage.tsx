@@ -10,7 +10,6 @@ import { Page, Card, Layout, Text, BlockStack, Banner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import {
   formatCurrency,
-  getSessionToken,
   getDashboardMetrics,
   getMerchantSettings,
   type DashboardMetrics,
@@ -175,10 +174,9 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const token = await getSessionToken();
         const [metricsData, merchantData] = await Promise.all([
-          getDashboardMetrics(token),
-          getMerchantSettings(token)
+          getDashboardMetrics(),
+          getMerchantSettings()
         ]);
 
         setMetrics(metricsData);
