@@ -13,8 +13,8 @@ import {
   InlineStack,
   Button,
 } from '@shopify/polaris';
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { getSessionToken, getMerchantSettings, updateMerchantSettings, getShopLogo } from '@/lib/api';
+import { useState, useCallback, useEffect } from 'react';
+import { getMerchantSettings, updateMerchantSettings, getShopLogo } from '@/lib/api';
 import AppFrame from '@/components/AppFrame';
 
 export default function Settings() {
@@ -27,94 +27,52 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Cache the session token and keep it fresh so Save never hangs
-  const tokenRef = useRef<string | null>(null);
-
-  const refreshToken = useCallback(async () => {
-    try {
-      const t = await getSessionToken();
-      tokenRef.current = t;
-      return t;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  // Fetch a fresh token on mount and every 55 s (tokens expire in ~1 min)
-  useEffect(() => {
-    refreshToken();
-    const interval = setInterval(refreshToken, 45_000);
-    return () => clearInterval(interval);
-  }, [refreshToken]);
-
-  // Load merchant settings on mount
   useEffect(() => {
     async function loadSettings() {
       try {
-        const token = tokenRef.current ?? await refreshToken();
-        if (!token) throw new Error('Could not get session token — try refreshing the page');
-
-        const merchant = await getMerchantSettings(token);
+        const merchant = await getMerchantSettings();
         setBonusPercentage(merchant.bonus_percentage);
         setBonusCapCents(merchant.bonus_cap_cents);
         setMerchantEmail(merchant.merchant_email);
         setBrandColor(merchant.brand_color);
         setLogoUrl(merchant.logo_url || '');
-        setLoading(false);
       } catch (err) {
         setSaveMessage({
           type: 'error',
           text: err instanceof Error ? err.message : 'Failed to load settings',
         });
+      } finally {
         setLoading(false);
       }
     }
-
-    // Small delay to let the first refreshToken() populate tokenRef
-    const timer = setTimeout(loadSettings, 200);
-    return () => clearTimeout(timer);
-  }, [refreshToken]);
+    loadSettings();
+  }, []);
 
   const handleFetchLogo = useCallback(async () => {
     try {
-      const token = tokenRef.current ?? await refreshToken();
-      if (!token) return;
-      const url = await getShopLogo(token);
+      const url = await getShopLogo();
       if (url) setLogoUrl(url);
     } catch {
       // best-effort
     }
-  }, [refreshToken]);
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     setSaveMessage(null);
-
     try {
-      // Use cached token; fall back to fresh fetch if needed
-      let token = tokenRef.current;
-      if (!token) {
-        token = await refreshToken();
-      }
-      if (!token) {
-        throw new Error('Could not get session token — try refreshing the page');
-      }
-
-      const updated = await updateMerchantSettings(token, {
+      const updated = await updateMerchantSettings({
         bonus_percentage: bonusPercentage,
         bonus_cap_cents: bonusCapCents,
         merchant_email: merchantEmail,
         brand_color: brandColor,
         logo_url: logoUrl || null,
       });
-
-      // Sync state from server response to avoid stale data
       setBonusPercentage(updated.bonus_percentage);
       setBonusCapCents(updated.bonus_cap_cents);
       setMerchantEmail(updated.merchant_email);
       setBrandColor(updated.brand_color);
       setLogoUrl(updated.logo_url || '');
-
       setSaveMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (err) {
       setSaveMessage({
@@ -124,7 +82,7 @@ export default function Settings() {
     } finally {
       setSaving(false);
     }
-  }, [bonusPercentage, bonusCapCents, merchantEmail, brandColor, logoUrl, refreshToken]);
+  }, [bonusPercentage, bonusCapCents, merchantEmail, brandColor, logoUrl]);
 
   if (loading) {
     return (
@@ -158,7 +116,6 @@ export default function Settings() {
                 />
               )}
 
-              {/* Offer Settings */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
@@ -192,7 +149,6 @@ export default function Settings() {
                 </BlockStack>
               </Card>
 
-              {/* Merchant Info */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
@@ -210,7 +166,6 @@ export default function Settings() {
                 </BlockStack>
               </Card>
 
-              {/* Branding */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">

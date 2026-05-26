@@ -1,26 +1,27 @@
 /**
- * API client utilities for Pleero frontend.
- * Handles communication with backend API.
+ * API client for Pleero frontend.
+ * fetchWithAuth always gets a fresh token from window.shopify.idToken() — never
+ * pass a pre-fetched token. Shopify session tokens expire in 60 s; calling
+ * idToken() before every request is the correct pattern per Shopify docs.
  */
 
 import { getSessionToken as getAppBridgeSessionToken, invalidateStoredToken } from './shopify-app-bridge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-async function fetchWithAuth(
-  path: string,
-  sessionToken: string,
-  init: RequestInit = {},
-): Promise<Response> {
+// ─── Internal fetch helper ────────────────────────────────────────────────────
+
+async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const token = await getAppBridgeSessionToken();
   const headers = {
-    Authorization: `Bearer ${sessionToken}`,
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   };
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (res.status !== 401) return res;
 
-  // Token rejected — invalidate cache, get a fresh one, retry once
+  // Token was rejected — invalidate cache, get a genuinely fresh one, retry once
   invalidateStoredToken();
   const freshToken = await getAppBridgeSessionToken();
   return fetch(`${API_BASE_URL}${path}`, {
@@ -28,6 +29,8 @@ async function fetchWithAuth(
     headers: { ...headers, Authorization: `Bearer ${freshToken}` },
   });
 }
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface DashboardMetrics {
   offers_sent: number;
@@ -59,7 +62,18 @@ export interface MerchantUpdate {
   logo_url?: string | null;
 }
 
-export interface Offer {
+export interface MerchantOffer {
+  id: string;
+  order_number: string;
+  customer_email: string;
+  refund_amount_cents: number;
+  credit_amount_cents: number;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  revenue_retained_cents: number | null;
+  created_at: string;
+}
+
+export interface PublicOffer {
   offer_token: string;
   customer_first_name: string;
   refund_amount_cents: number;
@@ -75,103 +89,68 @@ export interface OfferActionResponse {
   message: string;
 }
 
-/**
- * Get session token from App Bridge.
- * This should be called from client components with access to App Bridge.
- */
-export async function getSessionToken(): Promise<string> {
-  return await getAppBridgeSessionToken();
+// ─── Authenticated endpoints ──────────────────────────────────────────────────
+
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  const res = await fetchWithAuth('/api/dashboard/metrics');
+  if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.statusText}`);
+  return res.json();
 }
 
-/**
- * Fetch dashboard metrics for current month.
- */
-export async function getDashboardMetrics(sessionToken: string): Promise<DashboardMetrics> {
-  const response = await fetchWithAuth('/api/dashboard/metrics', sessionToken);
-  if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.statusText}`);
-  return response.json();
+export async function getMerchantSettings(): Promise<Merchant> {
+  const res = await fetchWithAuth('/api/merchants/me');
+  if (!res.ok) throw new Error(`Failed to fetch settings: ${res.statusText}`);
+  return res.json();
 }
 
-/**
- * Get merchant settings.
- */
-export async function getMerchantSettings(sessionToken: string): Promise<Merchant> {
-  const response = await fetchWithAuth('/api/merchants/me', sessionToken);
-  if (!response.ok) throw new Error(`Failed to fetch settings: ${response.statusText}`);
-  return response.json();
-}
-
-/**
- * Update merchant settings.
- */
-export async function updateMerchantSettings(
-  sessionToken: string,
-  data: MerchantUpdate
-): Promise<Merchant> {
-  const response = await fetchWithAuth('/api/merchants/me', sessionToken, {
+export async function updateMerchantSettings(data: MerchantUpdate): Promise<Merchant> {
+  const res = await fetchWithAuth('/api/merchants/me', {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
-  if (!response.ok) {
-    const body = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to save settings (${response.status}): ${body}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => res.statusText);
+    throw new Error(`Failed to save settings (${res.status}): ${body}`);
   }
-  return response.json();
+  return res.json();
 }
 
-export async function getShopLogo(sessionToken: string): Promise<string | null> {
-  const response = await fetchWithAuth('/api/shop/logo', sessionToken);
-  if (!response.ok) return null;
-  const data = await response.json();
+export async function getMerchantOffers(): Promise<MerchantOffer[]> {
+  const res = await fetchWithAuth('/api/offers');
+  if (!res.ok) throw new Error(`Failed to fetch offers: ${res.statusText}`);
+  const data = await res.json();
+  return data.offers ?? [];
+}
+
+export async function getShopLogo(): Promise<string | null> {
+  const res = await fetchWithAuth('/api/shop/logo');
+  if (!res.ok) return null;
+  const data = await res.json();
   return data.logo_url ?? null;
 }
 
-/**
- * Get offer details by token (public endpoint).
- */
-export async function getOffer(token: string): Promise<Offer> {
-  const response = await fetch(`${API_BASE_URL}/offers/${token}`);
+// ─── Public endpoints (no auth) ───────────────────────────────────────────────
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch offer: ${response.statusText}`);
-  }
-
-  return response.json();
+export async function getOffer(token: string): Promise<PublicOffer> {
+  const res = await fetch(`${API_BASE_URL}/offers/${token}`);
+  if (!res.ok) throw new Error(`Failed to fetch offer: ${res.statusText}`);
+  return res.json();
 }
 
-/**
- * Accept an offer (public endpoint).
- */
 export async function acceptOffer(token: string): Promise<OfferActionResponse> {
-  const response = await fetch(`${API_BASE_URL}/offers/${token}/accept`, {
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to accept offer: ${response.statusText}`);
-  }
-
-  return response.json();
+  const res = await fetch(`${API_BASE_URL}/offers/${token}/accept`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Failed to accept offer: ${res.statusText}`);
+  return res.json();
 }
 
-/**
- * Decline an offer (public endpoint).
- */
 export async function declineOffer(token: string): Promise<OfferActionResponse> {
-  const response = await fetch(`${API_BASE_URL}/offers/${token}/decline`, {
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to decline offer: ${response.statusText}`);
-  }
-
-  return response.json();
+  const res = await fetch(`${API_BASE_URL}/offers/${token}/decline`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Failed to decline offer: ${res.statusText}`);
+  return res.json();
 }
 
-/**
- * Format cents as dollar string (e.g., 5000 -> "$50").
- */
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
 export function formatCurrency(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
