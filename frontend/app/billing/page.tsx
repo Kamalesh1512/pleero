@@ -29,7 +29,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     refreshToken();
-    const interval = setInterval(refreshToken, 55_000);
+    const interval = setInterval(refreshToken, 45_000);
     return () => clearInterval(interval);
   }, [refreshToken]);
 

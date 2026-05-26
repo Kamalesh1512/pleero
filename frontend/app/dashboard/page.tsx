@@ -7,7 +7,7 @@
  */
 
 import { Page, Card, Layout, Text, BlockStack, Banner } from '@shopify/polaris';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   formatCurrency,
   getSessionToken,
@@ -88,10 +88,30 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [activatingBilling, setActivatingBilling] = useState(false);
 
+  const tokenRef = useRef<string | null>(null);
+
+  const refreshToken = useCallback(async () => {
+    try {
+      const t = await getSessionToken();
+      tokenRef.current = t;
+      return t;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Keep a fresh token at all times — tokens expire in ~60 s, refresh every 45 s
+  useEffect(() => {
+    refreshToken();
+    const interval = setInterval(refreshToken, 45_000);
+    return () => clearInterval(interval);
+  }, [refreshToken]);
+
   useEffect(() => {
     async function loadData() {
       try {
-        const token = await getSessionToken();
+        const token = tokenRef.current ?? await refreshToken();
+        if (!token) throw new Error('Unable to authenticate. Try refreshing the page.');
         const [metricsData, merchantData] = await Promise.all([
           getDashboardMetrics(token),
           getMerchantSettings(token)
@@ -122,8 +142,9 @@ export default function DashboardPage() {
       }
     }
 
-    loadData();
-  }, []);
+    const timer = setTimeout(loadData, 200);
+    return () => clearTimeout(timer);
+  }, [refreshToken]);
 
   const handleActivateBilling = useCallback(async () => {
     setActivatingBilling(true);

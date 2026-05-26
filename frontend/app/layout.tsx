@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from 'next/font/google';
 import { GoogleAnalytics } from '@next/third-parties/google';
+import Script from 'next/script';
 import "./globals.css";
 import Providers from "@/components/Providers";
 
@@ -68,6 +69,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
       <body>
+        {/* Required by Shopify embedded app checks: load App Bridge from CDN before any React code runs.
+            This makes window.shopify available synchronously and satisfies the "App Bridge CDN script"
+            and "session token" checks in the Shopify Partner Dashboard submission flow. */}
+        <Script
+          id="shopify-app-bridge"
+          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
+          strategy="beforeInteractive"
+        />
         <Providers>{children}</Providers>
       </body>
       {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
