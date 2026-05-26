@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
-import { getOffer, acceptOffer, declineOffer, formatCurrency, type Offer } from '@/lib/api';
+import { getOffer, acceptOffer, declineOffer, formatCurrency, type PublicOffer as Offer } from '@/lib/api';
 
 const CONFETTI_COLORS = [
   '#FF6B6B', '#FF8C42', '#F9CA24', '#6BCB77', '#4D96FF',

@@ -34,6 +34,7 @@ def verify_session_token(token: str) -> dict[str, str]:
             settings.SHOPIFY_API_SECRET,
             algorithms=["HS256"],
             audience=settings.SHOPIFY_API_KEY,
+            leeway=30,
         )
 
         # Extract shop domain

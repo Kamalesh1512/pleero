@@ -1,56 +1,30 @@
 'use client';
 
-/**
- * Billing page - shows subscription status and billing controls.
- * MVP: displays trial/active status, future: handles subscription changes.
- */
-
 import { Page, Card, Layout, Text, BlockStack, Banner, Button } from '@shopify/polaris';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
-import { getSessionToken, getMerchantSettings, type Merchant } from '@/lib/api';
+import { getMerchantSettings, type Merchant } from '@/lib/api';
 
 export default function BillingPage() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
-  const tokenRef = useRef<string | null>(null);
 
-  const refreshToken = useCallback(async () => {
+  const loadMerchant = useCallback(async () => {
     try {
-      const t = await getSessionToken();
-      tokenRef.current = t;
-      return t;
-    } catch {
-      return null;
+      setLoading(true);
+      const merchantData = await getMerchantSettings();
+      setMerchant(merchantData);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load billing info');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    refreshToken();
-    const interval = setInterval(refreshToken, 45_000);
-    return () => clearInterval(interval);
-  }, [refreshToken]);
-
-  useEffect(() => {
-    async function loadMerchant() {
-      try {
-        const token = tokenRef.current ?? await refreshToken();
-        if (!token) throw new Error('Could not get session token — try refreshing the page');
-
-        const merchantData = await getMerchantSettings(token);
-        setMerchant(merchantData);
-        setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load billing info');
-        setLoading(false);
-      }
-    }
-
-    const timer = setTimeout(loadMerchant, 200);
-    return () => clearTimeout(timer);
-  }, [refreshToken]);
+  useEffect(() => { loadMerchant(); }, [loadMerchant]);
 
   const handleActivateBilling = async () => {
     setActivating(true);
@@ -78,7 +52,9 @@ export default function BillingPage() {
     return (
       <AppFrame>
         <Page title="Billing">
-          <Text as="p" tone="critical">{error || 'Failed to load billing info'}</Text>
+          <Banner tone="critical" title="Failed to load billing info" action={{ content: 'Retry', onAction: loadMerchant }}>
+            <Text as="p">{error ?? 'Unknown error'}</Text>
+          </Banner>
         </Page>
       </AppFrame>
     );
@@ -90,14 +66,10 @@ export default function BillingPage() {
 
   return (
     <AppFrame>
-      <Page
-        title="Billing"
-        subtitle="Manage your subscription"
-      >
+      <Page title="Billing" subtitle="Manage your subscription">
         <Layout>
           <Layout.Section>
             <BlockStack gap="400">
-              {/* Trial Banner */}
               {isTrial && !isActive && (
                 <Banner tone="info">
                   <Text as="p">
@@ -107,7 +79,6 @@ export default function BillingPage() {
                 </Banner>
               )}
 
-              {/* Trial Ended Banner */}
               {trialEnded && !isActive && (
                 <Banner
                   tone="warning"
@@ -123,14 +94,12 @@ export default function BillingPage() {
                 </Banner>
               )}
 
-              {/* Active Subscription */}
               {isActive && (
                 <Banner tone="success">
                   <Text as="p">Your subscription is active.</Text>
                 </Banner>
               )}
 
-              {/* Plan Details */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">Plan details</Text>
@@ -160,18 +129,13 @@ export default function BillingPage() {
                   </BlockStack>
 
                   {!isActive && !trialEnded && (
-                    <Button
-                      onClick={handleActivateBilling}
-                      loading={activating}
-                      variant="primary"
-                    >
+                    <Button onClick={handleActivateBilling} loading={activating} variant="primary">
                       Activate $99/month plan
                     </Button>
                   )}
                 </BlockStack>
               </Card>
 
-              {/* What's Included */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">What's included</Text>

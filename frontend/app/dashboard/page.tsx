@@ -1,32 +1,21 @@
 'use client';
 
-/**
- * Dashboard page - shows merchant metrics and recent activity.
- * Embedded in Shopify admin via App Bridge.
- * Follows Polaris chrome with custom metric cards using dark design tokens.
- */
-
 import { Page, Card, Layout, Text, BlockStack, Banner } from '@shopify/polaris';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   formatCurrency,
-  getSessionToken,
   getDashboardMetrics,
   getMerchantSettings,
   type DashboardMetrics,
-  type Merchant
+  type Merchant,
 } from '@/lib/api';
 import AppFrame from '@/components/AppFrame';
 
-/**
- * Metric Card Component - Custom dark surface with DM Mono numbers.
- * Applies Pleero dark tokens inside component interior only.
- */
 function MetricCard({
   label,
   value,
   delta,
-  deltaType
+  deltaType,
 }: {
   label: string;
   value: string | number;
@@ -38,39 +27,34 @@ function MetricCard({
       background: 'var(--pleero-ink-surface)',
       border: '0.5px solid var(--pleero-ink-border)',
       borderRadius: 'var(--radius-md)',
-      padding: '16px 20px'
+      padding: '16px 20px',
     }}>
-      {/* Label */}
       <div style={{
         fontFamily: 'var(--font-mono)',
         fontSize: '11px',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
         color: 'var(--pleero-muted)',
-        marginBottom: 'var(--space-2)'
+        marginBottom: 'var(--space-2)',
       }}>
         {label}
       </div>
-
-      {/* Value */}
       <div style={{
         fontFamily: 'var(--font-mono)',
         fontSize: '26px',
         fontWeight: 600,
         color: 'var(--pleero-green-text)',
-        marginBottom: delta ? 'var(--space-1)' : 0
+        marginBottom: delta ? 'var(--space-1)' : 0,
       }}>
         {value}
       </div>
-
-      {/* Delta */}
       {delta && (
         <div style={{
           fontFamily: 'var(--font-mono)',
           fontSize: '11px',
           color: deltaType === 'positive' ? 'var(--pleero-green-text)' :
                  deltaType === 'negative' ? 'var(--pleero-danger)' :
-                 'var(--pleero-muted)'
+                 'var(--pleero-muted)',
         }}>
           {deltaType === 'positive' && '↑ '}
           {deltaType === 'negative' && '↓ '}
@@ -86,91 +70,26 @@ export default function DashboardPage() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activatingBilling, setActivatingBilling] = useState(false);
 
-  const tokenRef = useRef<string | null>(null);
-
-  const refreshToken = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const t = await getSessionToken();
-      tokenRef.current = t;
-      return t;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  // Keep a fresh token at all times — tokens expire in ~60 s, refresh every 45 s
-  useEffect(() => {
-    refreshToken();
-    const interval = setInterval(refreshToken, 45_000);
-    return () => clearInterval(interval);
-  }, [refreshToken]);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const token = tokenRef.current ?? await refreshToken();
-        if (!token) throw new Error('Unable to authenticate. Try refreshing the page.');
-        const [metricsData, merchantData] = await Promise.all([
-          getDashboardMetrics(token),
-          getMerchantSettings(token)
-        ]);
-
-        setMetrics(metricsData);
-        setMerchant(merchantData);
-        setLoading(false);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
-
-        // Provide helpful message if App Bridge isn't initialized
-        if (errorMessage.includes('App Bridge not initialized')) {
-          setError(
-            'This app must be accessed from Shopify Admin. ' +
-            'Open your app from the Shopify Partner Dashboard or install it on a test store.'
-          );
-        } else if (errorMessage.includes('fetch')) {
-          setError(
-            `Cannot connect to backend at ${process.env.NEXT_PUBLIC_API_URL}. ` +
-            'Make sure your backend is running and accessible. ' +
-            'Check browser console for details.'
-          );
-        } else {
-          setError(errorMessage);
-        }
-        setLoading(false);
-      }
-    }
-
-    const timer = setTimeout(loadData, 200);
-    return () => clearTimeout(timer);
-  }, [refreshToken]);
-
-  const handleActivateBilling = useCallback(async () => {
-    setActivatingBilling(true);
-    try {
-      // TODO: Get session token and call billing API
-      // const token = await getSessionToken();
-      // const response = await fetch(`${API_BASE_URL}/api/billing/activate`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      // });
-      // const data = await response.json();
-      // window.location.href = data.confirmation_url;
-
-      // Mock for MVP
-      alert('Billing activation would redirect to Shopify charge approval page');
+      setLoading(true);
+      const [metricsData, merchantData] = await Promise.all([
+        getDashboardMetrics(),
+        getMerchantSettings(),
+      ]);
+      setMetrics(metricsData);
+      setMerchant(merchantData);
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to activate billing');
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
-      setActivatingBilling(false);
+      setLoading(false);
     }
   }, []);
 
-  // Check if trial has ended
+  useEffect(() => { loadData(); }, [loadData]);
+
   const shouldShowBillingBanner =
     merchant &&
     merchant.subscription_status !== 'ACTIVE' &&
@@ -180,9 +99,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <AppFrame>
-        <Page title="Dashboard">
-          <Text as="p">Loading...</Text>
-        </Page>
+        <Page title="Dashboard"><Text as="p">Loading...</Text></Page>
       </AppFrame>
     );
   }
@@ -191,9 +108,9 @@ export default function DashboardPage() {
     return (
       <AppFrame>
         <Page title="Dashboard">
-          <Text as="p" tone="critical">
-            {error || 'Failed to load metrics'}
-          </Text>
+          <Banner tone="critical" title="Failed to load dashboard" action={{ content: 'Retry', onAction: loadData }}>
+            <Text as="p">{error ?? 'Unknown error'}</Text>
+          </Banner>
         </Page>
       </AppFrame>
     );
@@ -201,35 +118,22 @@ export default function DashboardPage() {
 
   return (
     <AppFrame>
-      <Page
-        title="Dashboard"
-        subtitle="This month's performance"
-      >
+      <Page title="Dashboard" subtitle="This month's performance">
         <Layout>
           <Layout.Section>
             <BlockStack gap="500">
-              {/* Billing Banner */}
               {shouldShowBillingBanner && (
-                <Banner
-                  title="Your trial has ended"
-                  tone="warning"
-                  action={{
-                    content: 'Activate $99/month plan',
-                    onAction: handleActivateBilling,
-                    loading: activatingBilling,
-                  }}
-                >
+                <Banner title="Your trial has ended" tone="warning">
                   <Text as="p">
-                    Activate your subscription to continue receiving store credit offers
+                    Activate your subscription to continue receiving store credit offers.
                   </Text>
                 </Banner>
               )}
 
-              {/* Metrics Cards Row - Custom styled with dark tokens */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                gap: 'var(--space-5)'
+                gap: 'var(--space-5)',
               }}>
                 <MetricCard
                   label="Revenue retained"
@@ -237,42 +141,27 @@ export default function DashboardPage() {
                   delta={metrics.offers_accepted > 0 ? `${metrics.offers_accepted} accepted` : undefined}
                   deltaType={metrics.offers_accepted > 0 ? 'positive' : 'neutral'}
                 />
-
-                <MetricCard
-                  label="Offers shown"
-                  value={metrics.offers_sent}
-                />
-
+                <MetricCard label="Offers shown" value={metrics.offers_sent} />
                 <MetricCard
                   label="Acceptance rate"
                   value={`${metrics.acceptance_rate.toFixed(1)}%`}
                   delta={metrics.acceptance_rate >= 15 ? 'On target' : 'Below target'}
                   deltaType={metrics.acceptance_rate >= 15 ? 'positive' : 'neutral'}
                 />
-
                 <MetricCard
-                  label="Trial → paid"
+                  label="Status"
                   value={merchant?.subscription_status === 'ACTIVE' ? 'Active' : 'Trial'}
                   deltaType={merchant?.subscription_status === 'ACTIVE' ? 'positive' : 'neutral'}
                 />
               </div>
 
-              {/* Getting Started Guide */}
               <Card>
                 <BlockStack gap="400">
-                  <Text as="h2" variant="headingLg">
-                    How it works
-                  </Text>
+                  <Text as="h2" variant="headingLg">How it works</Text>
                   <BlockStack gap="200">
-                    <Text as="p">
-                      1. When a customer requests a refund, Pleero automatically sends them an offer
-                    </Text>
-                    <Text as="p">
-                      2. They can choose to take {merchant ? `${formatCurrency(merchant.bonus_cap_cents)} bonus` : 'bonus'} as store credit instead
-                    </Text>
-                    <Text as="p">
-                      3. Credits are instant and never expire
-                    </Text>
+                    <Text as="p">1. When a customer requests a refund, Pleero automatically sends them an offer</Text>
+                    <Text as="p">2. They can choose to take {merchant ? `${formatCurrency(merchant.bonus_cap_cents)} bonus` : 'bonus'} as store credit instead</Text>
+                    <Text as="p">3. Credits are instant and never expire</Text>
                   </BlockStack>
                 </BlockStack>
               </Card>
