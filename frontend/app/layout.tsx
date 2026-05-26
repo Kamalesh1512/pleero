@@ -21,6 +21,9 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
+  other: {
+    'shopify-api-key': process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ?? '',
+  },
   title: "Pleero – Turn Refunds Into Store Credit | Shopify App",
   description: "Pleero automatically offers customers bonus store credit instead of cash refunds. Keep 15–25% of refund revenue in your store. 14-day free trial. No code required.",
   keywords: "shopify refunds, store credit app, refund retention, return to store credit, shopify returns app, revenue retention shopify",
