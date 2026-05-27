@@ -165,96 +165,65 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.DIGITALOCEAN_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy deployment files to server
+      - name: Write .env on runner
         run: |
+          printf '%s\n' \
+            "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" \
+            "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" \
+            "SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}" \
+            "SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}" \
+            "ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}" \
+            "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" \
+            "GITHUB_REPOSITORY=${{ needs.version.outputs.repo_lowercase }}" \
+            > /tmp/pleero.env
+          chmod 600 /tmp/pleero.env
+
+      - name: Copy files to VPS
+        run: |
+          scp /tmp/pleero.env \
+            ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/.env
           scp docker-compose.production.yml \
             ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/
           scp Caddyfile.production \
             ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }}:/home/${{ secrets.DIGITALOCEAN_USER }}/app/Caddyfile.production
 
-      - name: Deploy backend
+      - name: Pull image, migrate, restart containers
         run: |
-          ssh ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }} << 'EOF'
-            set -e
-            cd /home/${{ secrets.DIGITALOCEAN_USER }}/app
+          ssh ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }} \
+            "set -e
+             cd /home/${{ secrets.DIGITALOCEAN_USER }}/app
+             chmod 600 .env
+             echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+             docker pull ghcr.io/${{ needs.version.outputs.repo_lowercase }}/pleero-backend:${{ needs.version.outputs.version }}
+             docker pull ghcr.io/${{ needs.version.outputs.repo_lowercase }}/pleero-backend:latest
+             docker compose -f docker-compose.production.yml run --rm --pull never backend alembic upgrade head
+             docker compose -f docker-compose.production.yml up -d --pull never --force-recreate backend caddy
+             docker compose -f docker-compose.production.yml ps"
 
-            # ── Write .env from GitHub secrets ──────────────────────────────
-            # Single-quoted heredoc prevents local shell expansion;
-            # ${{ }} tokens are already substituted by GitHub Actions before
-            # this command is transmitted over SSH.
-            cat > .env << 'ENVEOF'
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}
-          SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}
-          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
-          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
-          GITHUB_REPOSITORY=${{ needs.version.outputs.repo_lowercase }}
-          ENVEOF
-            chmod 600 .env
+      - name: Wait for backend health
+        run: |
+          ssh ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }} \
+            "cd /home/${{ secrets.DIGITALOCEAN_USER }}/app
+             for i in \$(seq 1 30); do
+               if docker compose -f docker-compose.production.yml ps backend | grep -q '(healthy)'; then
+                 echo 'Backend is healthy'; exit 0
+               fi
+               if [ \"\$i\" -eq 30 ]; then
+                 docker compose -f docker-compose.production.yml logs backend --tail=60
+                 exit 1
+               fi
+               echo \"Waiting... (\$i/30)\"; sleep 2
+             done"
 
-            # ── Authenticate with GHCR ───────────────────────────────────────
-            echo "${{ secrets.GITHUB_TOKEN }}" | \
-              docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # ── Explicitly pull versioned image FIRST ────────────────────────
-            # This ensures the VPS has the exact image built in this workflow
-            # before we run migrations or recreate containers.
-            BACKEND_IMAGE="ghcr.io/${{ needs.version.outputs.repo_lowercase }}/pleero-backend"
-            echo "⬇️  Pulling ${BACKEND_IMAGE}:${{ needs.version.outputs.version }}"
-            docker pull "${BACKEND_IMAGE}:${{ needs.version.outputs.version }}"
-            echo "⬇️  Pulling ${BACKEND_IMAGE}:latest"
-            docker pull "${BACKEND_IMAGE}:latest"
-
-            # Confirm the image pulled by printing its ID
-            echo "🔍 Image ID on VPS:"
-            docker images --no-trunc --quiet "${BACKEND_IMAGE}:latest"
-
-            # ── Run database migrations ──────────────────────────────────────
-            # --pull never: image was already pulled above; avoid a redundant pull
-            docker compose -f docker-compose.production.yml \
-              run --rm --pull never backend alembic upgrade head
-
-            # ── Recreate containers with the new image ───────────────────────
-            # --pull never: image already current; --force-recreate drops old containers
-            docker compose -f docker-compose.production.yml \
-              up -d --pull never --force-recreate backend caddy
-
-            # ── Verify containers came up ────────────────────────────────────
-            echo "🔍 Container status:"
-            docker compose -f docker-compose.production.yml ps
-
-            echo "⏳ Waiting for backend healthcheck..."
-            for i in {1..30}; do
-              # docker compose ps plain text output contains "(healthy)" when healthy
-              if docker compose -f docker-compose.production.yml ps backend \
-                   | grep -q "(healthy)"; then
-                echo "✅ Backend is healthy"
-                break
-              fi
-              if [ "$i" -eq 30 ]; then
-                echo "❌ Backend failed to become healthy after 60 s"
-                docker compose -f docker-compose.production.yml logs backend --tail=60
-                exit 1
-              fi
-              echo "  Waiting... ($i/30)"
-              sleep 2
-            done
-
-            # ── Verify Caddy is running ──────────────────────────────────────
-            if ! docker compose -f docker-compose.production.yml ps caddy \
-                 | grep -q "Up"; then
-              echo "❌ Caddy is not running"
-              docker compose -f docker-compose.production.yml logs caddy --tail=50
-              exit 1
-            fi
-            echo "✅ Caddy is running"
-
-            # ── Clean up dangling/old images (keep last 48 h) ────────────────
-            docker image prune -af --filter "until=48h"
-
-            echo "✅ Backend ${{ needs.version.outputs.version }} deployed successfully"
-          EOF
+      - name: Verify Caddy and clean up images
+        run: |
+          ssh ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }} \
+            "cd /home/${{ secrets.DIGITALOCEAN_USER }}/app
+             docker compose -f docker-compose.production.yml ps caddy | grep -q 'Up' \
+               || { docker compose -f docker-compose.production.yml logs caddy --tail=50; exit 1; }
+             echo 'Caddy is running'
+             docker image prune -af --filter 'until=48h'
+             echo 'Deploy of ${{ needs.version.outputs.version }} complete'"
 
       - name: Verify backend via external health check
         run: |
