@@ -180,8 +180,7 @@ jobs:
 
             # ── Write .env from GitHub secrets ──────────────────────────────
             # Single-quoted heredoc prevents local shell expansion;
-            # ${{ }} tokens are already substituted by GitHub Actions before
-            # this command is transmitted over SSH.
+            # GitHub Actions substitutes all expressions before this runs.
             cat > .env << 'ENVEOF'
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
