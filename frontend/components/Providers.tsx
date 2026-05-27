@@ -1,6 +1,7 @@
 'use client';
 
 import { AppProvider } from '@shopify/polaris';
+import enTranslations from '@shopify/polaris/locales/en.json';
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect } from 'react';
 import { storeInitialToken, storeHost } from '@/lib/shopify-app-bridge';
@@ -20,7 +21,7 @@ export default function Providers({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <AppProvider i18n={{}}>
+    <AppProvider i18n={enTranslations}>
       {children}
     </AppProvider>
   );

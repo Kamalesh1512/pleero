@@ -3,7 +3,7 @@
 import { Page, Card, Layout, Text, BlockStack, Badge, DataTable, Banner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
-import { getMerchantOffers, formatCurrency, type MerchantOffer } from '@/lib/api';
+import { getMerchantOffers, formatCurrency, ApiError, type MerchantOffer } from '@/lib/api';
 
 export default function OffersPage() {
   const [offers, setOffers] = useState<MerchantOffer[]>([]);
@@ -17,7 +17,13 @@ export default function OffersPage() {
       setOffers(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load offers');
+      if (err instanceof ApiError && err.status === 404) {
+        setError('App setup incomplete. Please reinstall Pleero from the Shopify App Store.');
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('Authentication failed. Please refresh the page to reconnect.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load offers');
+      }
     } finally {
       setLoading(false);
     }

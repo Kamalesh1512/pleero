@@ -7,7 +7,19 @@
 
 import { getSessionToken as getAppBridgeSessionToken, invalidateStoredToken } from './shopify-app-bridge';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pleero.app';
+
+// ─── Typed API error ──────────────────────────────────────────────────────────
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 // ─── Internal fetch helper ────────────────────────────────────────────────────
 
@@ -28,6 +40,10 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
     ...init,
     headers: { ...headers, Authorization: `Bearer ${freshToken}` },
   });
+}
+
+function throwApiError(res: Response, context: string): never {
+  throw new ApiError(`${context}: ${res.statusText}`, res.status);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -93,13 +109,13 @@ export interface OfferActionResponse {
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const res = await fetchWithAuth('/api/dashboard/metrics');
-  if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.statusText}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch metrics');
   return res.json();
 }
 
 export async function getMerchantSettings(): Promise<Merchant> {
   const res = await fetchWithAuth('/api/merchants/me');
-  if (!res.ok) throw new Error(`Failed to fetch settings: ${res.statusText}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch settings');
   return res.json();
 }
 
@@ -110,14 +126,14 @@ export async function updateMerchantSettings(data: MerchantUpdate): Promise<Merc
   });
   if (!res.ok) {
     const body = await res.text().catch(() => res.statusText);
-    throw new Error(`Failed to save settings (${res.status}): ${body}`);
+    throw new ApiError(`Failed to save settings: ${body}`, res.status);
   }
   return res.json();
 }
 
 export async function getMerchantOffers(): Promise<MerchantOffer[]> {
   const res = await fetchWithAuth('/api/offers');
-  if (!res.ok) throw new Error(`Failed to fetch offers: ${res.statusText}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch offers');
   const data = await res.json();
   return data.offers ?? [];
 }
@@ -127,6 +143,12 @@ export async function getShopLogo(): Promise<string | null> {
   if (!res.ok) return null;
   const data = await res.json();
   return data.logo_url ?? null;
+}
+
+export async function activateBilling(): Promise<{ confirmation_url: string }> {
+  const res = await fetchWithAuth('/api/billing/activate', { method: 'POST' });
+  if (!res.ok) throwApiError(res, 'Failed to activate billing');
+  return res.json();
 }
 
 // ─── Public endpoints (no auth) ───────────────────────────────────────────────

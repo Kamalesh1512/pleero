@@ -14,7 +14,7 @@ import {
   Button,
 } from '@shopify/polaris';
 import { useState, useCallback, useEffect } from 'react';
-import { getMerchantSettings, updateMerchantSettings, getShopLogo } from '@/lib/api';
+import { getMerchantSettings, updateMerchantSettings, getShopLogo, ApiError } from '@/lib/api';
 import AppFrame from '@/components/AppFrame';
 
 export default function Settings() {
@@ -37,10 +37,15 @@ export default function Settings() {
         setBrandColor(merchant.brand_color);
         setLogoUrl(merchant.logo_url || '');
       } catch (err) {
-        setSaveMessage({
-          type: 'error',
-          text: err instanceof Error ? err.message : 'Failed to load settings',
-        });
+        const text =
+          err instanceof ApiError && err.status === 404
+            ? 'App setup incomplete. Please reinstall Pleero from the Shopify App Store.'
+            : err instanceof ApiError && err.status === 401
+              ? 'Authentication failed. Please refresh the page to reconnect.'
+              : err instanceof Error
+                ? err.message
+                : 'Failed to load settings';
+        setSaveMessage({ type: 'error', text });
       } finally {
         setLoading(false);
       }

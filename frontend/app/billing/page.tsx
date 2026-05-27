@@ -3,7 +3,7 @@
 import { Page, Card, Layout, Text, BlockStack, Banner, Button } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
-import { getMerchantSettings, type Merchant } from '@/lib/api';
+import { getMerchantSettings, activateBilling, ApiError, type Merchant } from '@/lib/api';
 
 export default function BillingPage() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -18,7 +18,13 @@ export default function BillingPage() {
       setMerchant(merchantData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load billing info');
+      if (err instanceof ApiError && err.status === 404) {
+        setError('App setup incomplete. Please reinstall Pleero from the Shopify App Store.');
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('Authentication failed. Please refresh the page to reconnect.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load billing info');
+      }
     } finally {
       setLoading(false);
     }
@@ -28,12 +34,15 @@ export default function BillingPage() {
 
   const handleActivateBilling = async () => {
     setActivating(true);
+    setError(null);
     try {
-      // TODO: Implement billing activation API call
-      alert('Billing activation would redirect to Shopify charge approval page');
+      const { confirmation_url } = await activateBilling();
+      // Navigate the top-level Shopify Admin frame to the charge confirmation page.
+      // window.open with '_top' is the standard pattern for embedded app billing redirects.
+      window.open(confirmation_url, '_top');
+      // Don't reset activating — the parent frame will navigate away.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to activate billing');
-    } finally {
       setActivating(false);
     }
   };

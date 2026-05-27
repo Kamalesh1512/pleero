@@ -6,6 +6,7 @@ import {
   formatCurrency,
   getDashboardMetrics,
   getMerchantSettings,
+  ApiError,
   type DashboardMetrics,
   type Merchant,
 } from '@/lib/api';
@@ -82,7 +83,13 @@ export default function DashboardPage() {
       setMerchant(merchantData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      if (err instanceof ApiError && err.status === 404) {
+        setError('App setup incomplete. Please reinstall Pleero from the Shopify App Store.');
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('Authentication failed. Please refresh the page to reconnect.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      }
     } finally {
       setLoading(false);
     }
