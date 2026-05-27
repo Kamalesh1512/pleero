@@ -1,4 +1,4 @@
-import { Page, Card, Text, BlockStack } from '@shopify/polaris';
+import { Card, Text, BlockStack } from '@shopify/polaris';
 import Link from 'next/link';
 
 export default function NotFound() {

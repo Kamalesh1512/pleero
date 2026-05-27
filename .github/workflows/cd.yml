@@ -206,9 +206,9 @@ jobs:
             echo "⬇️  Pulling ${BACKEND_IMAGE}:latest"
             docker pull "${BACKEND_IMAGE}:latest"
 
-            # Confirm the digest matches what was just built
-            echo "🔍 Image digest on VPS:"
-            docker inspect --format='{{index .RepoDigests 0}}' "${BACKEND_IMAGE}:latest"
+            # Confirm the image pulled by printing its ID
+            echo "🔍 Image ID on VPS:"
+            docker images --no-trunc --quiet "${BACKEND_IMAGE}:latest"
 
             # ── Run database migrations ──────────────────────────────────────
             # --pull never: image was already pulled above; avoid a redundant pull
@@ -226,12 +226,9 @@ jobs:
 
             echo "⏳ Waiting for backend healthcheck..."
             for i in {1..30}; do
-              STATUS=$(docker compose -f docker-compose.production.yml ps backend \
-                       --format json 2>/dev/null | python3 -c \
-                       "import sys,json; data=sys.stdin.read(); \
-                        rows=[json.loads(l) for l in data.strip().split('\n') if l]; \
-                        print(rows[0].get('Health','')) if rows else print('')" 2>/dev/null || echo "")
-              if [ "$STATUS" = "healthy" ]; then
+              # docker compose ps plain text output contains "(healthy)" when healthy
+              if docker compose -f docker-compose.production.yml ps backend \
+                   | grep -q "(healthy)"; then
                 echo "✅ Backend is healthy"
                 break
               fi
@@ -246,7 +243,7 @@ jobs:
 
             # ── Verify Caddy is running ──────────────────────────────────────
             if ! docker compose -f docker-compose.production.yml ps caddy \
-                 --format json 2>/dev/null | grep -q '"State":"running"'; then
+                 | grep -q "Up"; then
               echo "❌ Caddy is not running"
               docker compose -f docker-compose.production.yml logs caddy --tail=50
               exit 1
