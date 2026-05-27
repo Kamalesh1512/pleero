@@ -3,6 +3,8 @@ Shopify App Bridge session token authentication.
 Verifies JWT tokens from embedded app frontend.
 """
 
+from urllib.parse import urlparse
+
 import jwt
 from fastapi import Header, HTTPException
 from typing import Annotated
@@ -11,6 +13,24 @@ from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _extract_shop_domain(dest: str) -> str | None:
+    """
+    Robustly extract the bare shop domain from the JWT dest claim.
+
+    Shopify's dest is always 'https://shop.myshopify.com' but we parse it
+    defensively to handle any trailing slashes or unexpected formatting.
+    """
+    if not dest:
+        return None
+    try:
+        parsed = urlparse(dest)
+        # Use netloc (hostname) when dest is a URL; fall back to raw value
+        domain = parsed.netloc if parsed.netloc else dest
+        return domain.lower().rstrip("/")
+    except Exception:
+        return dest.replace("https://", "").replace("http://", "").rstrip("/").lower()
 
 
 def verify_session_token(token: str) -> dict[str, str]:
@@ -27,28 +47,33 @@ def verify_session_token(token: str) -> dict[str, str]:
         HTTPException: If token is invalid
     """
     try:
-        # Decode JWT
-        # Shopify uses HS256 with the API secret as the key
+        # Shopify uses HS256 signed with the API secret; audience is the API key (client_id)
         payload = jwt.decode(
             token,
             settings.SHOPIFY_API_SECRET,
             algorithms=["HS256"],
             audience=settings.SHOPIFY_API_KEY,
-            leeway=30,
+            leeway=600,
         )
 
-        # Extract shop domain
-        shop_domain = payload.get("dest")
-        if not shop_domain:
+        # Extract and normalize shop domain from the dest claim
+        dest = payload.get("dest")
+        if not dest:
             logger.error("session_token_missing_dest")
             raise HTTPException(
                 status_code=401,
                 detail="Invalid session token: missing dest",
             )
 
-        # Remove https:// prefix if present
-        if shop_domain.startswith("https://"):
-            shop_domain = shop_domain.replace("https://", "")
+        shop_domain = _extract_shop_domain(dest)
+        if not shop_domain:
+            logger.error("session_token_invalid_dest", dest=dest)
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session token: malformed dest",
+            )
+
+        logger.debug("session_token_verified", shop=shop_domain)
 
         return {
             "shop": shop_domain,

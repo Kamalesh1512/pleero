@@ -22,12 +22,10 @@ export function invalidateStoredToken(): void {
 function getStoredInitialToken(): string | null {
   try {
     const token = sessionStorage.getItem('_pleero_id_token');
-    const ts = sessionStorage.getItem('_pleero_id_token_ts');
-    if (!token || !ts) return null;
-    // Backend has leeway=30, so tokens up to 90s old are accepted.
-    // Use 85s here to stay safely within that window.
-    if (Date.now() - Number(ts) > 85_000) return null;
+    if (!token) return null;
     return token;
+    // No client-side TTL — the backend is the sole authority on token expiry.
+    // Backend leeway=600 accepts tokens for ~11 minutes from issue time.
   } catch {
     return null;
   }
@@ -75,44 +73,91 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-// ─── Silent reload (inside Shopify Admin iframe only) ────────────────────────
-// When idToken() fails due to "Host did not expose RPC", Shopify Admin will
-// inject a fresh id_token on reload. Guard prevents infinite loops when the
-// app is accessed directly (no parent frame).
+// ─── RPC retry helper ────────────────────────────────────────────────────────
 
-function reloadForFreshToken(): Promise<never> {
-  if (typeof window !== 'undefined' && window.parent !== window) {
-    window.location.reload();
+function isRpcNotReadyError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('Host did not expose RPC');
+}
+
+/**
+ * Call shopify.idToken() and retry if the RPC channel isn't established yet.
+ *
+ * "Host did not expose RPC" is transient: it fires when the App Bridge CDN
+ * script loads on a redirected page and our code calls idToken() before the
+ * postMessage handshake between the iframe and Shopify Admin completes (usually
+ * within a few hundred milliseconds).  Three retries with increasing back-off
+ * cover the window without adding perceptible latency in the normal path.
+ */
+async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await withTimeout(shopify.idToken(), 5_000);
+    } catch (err) {
+      if (isRpcNotReadyError(err) && attempt < maxAttempts) {
+        // Back off: 400 ms, 800 ms
+        await new Promise(resolve => setTimeout(resolve, attempt * 400));
+        continue;
+      }
+      throw err;
+    }
   }
-  return new Promise(() => {}); // never resolves — page is reloading
+  // Unreachable — TypeScript needs a return/throw after the loop
+  throw new Error('idTokenWithRetry: max attempts exceeded');
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Get a fresh Shopify session token for authenticating backend requests.
+ * Get a Shopify session token for authenticating backend requests.
  *
- * Strategy:
- *  1. Stored id_token from initial embed URL (valid ≤85 s per backend leeway)
- *  2. window.shopify.idToken() — CDN injected by Shopify Admin
- *  3. Silent reload inside iframe so Shopify Admin injects a fresh token
+ * Strategy (in order):
+ *  0. id_token still present in the current URL — fastest path, no RPC needed.
+ *     Shopify Admin always injects id_token into the initial embed URL.
+ *  1. id_token stored in sessionStorage from a previous URL load.
+ *  2. window.shopify.idToken() — RPC call to Shopify Admin, retried up to 3×
+ *     to tolerate the "Host did not expose RPC" transient error that occurs
+ *     when the App Bridge CDN reinitialises after a server-side redirect.
  */
 export async function getSessionToken(): Promise<string> {
-  const stored = await pollForStoredToken(1500);
-  if (stored) return stored;
-
-  const shopify = await waitForShopifyGlobal(3000);
-  if (shopify) {
-    try {
-      const token = await withTimeout(shopify.idToken(), 8_000);
-      storeInitialToken(token);
-      return token;
-    } catch (err) {
-      console.warn('[Pleero] window.shopify.idToken() failed, reloading for fresh token:', err);
-      return reloadForFreshToken();
+  // ── Path 0: id_token still in the current page URL ──────────────────────
+  // This is true for every first load from Shopify Admin. Reading it here
+  // (rather than waiting for Providers.tsx useEffect) eliminates the race
+  // condition and means idToken() is never called on the initial render.
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('id_token');
+    if (urlToken) {
+      storeInitialToken(urlToken);
+      return urlToken;
     }
   }
 
-  // Only reached when accessed directly outside Shopify Admin
-  throw new Error('Unable to authenticate. Try refreshing the page.');
+  // ── Path 1: token already cached from a prior call ───────────────────────
+  const stored = await pollForStoredToken(1500);
+  if (stored) return stored;
+
+  // ── Path 2: ask App Bridge CDN for a fresh token via RPC ─────────────────
+  const shopify = await waitForShopifyGlobal(3000);
+  if (!shopify) {
+    throw new Error(
+      'Shopify App Bridge not available. Open this app from your Shopify Admin.',
+    );
+  }
+
+  try {
+    const token = await idTokenWithRetry(shopify);
+    storeInitialToken(token);
+    return token;
+  } catch (err) {
+    if (isRpcNotReadyError(err)) {
+      throw new Error(
+        'Shopify Admin RPC channel not ready. Please refresh the page inside Shopify Admin.',
+      );
+    }
+    console.warn('[Pleero] window.shopify.idToken() failed:', err);
+    throw new Error(
+      'Unable to authenticate with Shopify. Please refresh the page inside Shopify Admin.',
+    );
+  }
 }
