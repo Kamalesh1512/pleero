@@ -1,7 +1,16 @@
 /**
  * Shopify session token utilities.
  * Uses window.shopify (CDN injected by Shopify Admin) — no npm App Bridge init.
+ *
+ * Token lifecycle:
+ *   Shopify issues JWTs with 60 s exp.  Our backend leeway=600 s means the
+ *   backend accepts them for ≈11 minutes.  We proactively refresh after
+ *   9 minutes so no request ever hits an expired token.
  */
+
+// ─── How long to trust a cached token before proactively refreshing ──────────
+// 9 minutes: gives a 2-minute buffer before the backend's 11-minute cutoff.
+const TOKEN_PROACTIVE_REFRESH_MS = 9 * 60 * 1000;
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -19,13 +28,18 @@ export function invalidateStoredToken(): void {
   } catch { /* */ }
 }
 
-function getStoredInitialToken(): string | null {
+/**
+ * Return the cached token only if it is still within the proactive-refresh
+ * window.  Returns null if absent OR if older than TOKEN_PROACTIVE_REFRESH_MS,
+ * so the caller falls through to a live idToken() call instead.
+ */
+function getStoredTokenIfFresh(): string | null {
   try {
     const token = sessionStorage.getItem('_pleero_id_token');
     if (!token) return null;
+    const ts = parseInt(sessionStorage.getItem('_pleero_id_token_ts') ?? '0', 10);
+    if (Date.now() - ts > TOKEN_PROACTIVE_REFRESH_MS) return null;
     return token;
-    // No client-side TTL — the backend is the sole authority on token expiry.
-    // Backend leeway=600 accepts tokens for ~11 minutes from issue time.
   } catch {
     return null;
   }
@@ -45,7 +59,9 @@ async function waitForShopifyGlobal(maxWaitMs = 3000): Promise<ShopifyGlobal | n
   if (typeof window === 'undefined') return null;
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const s = (window as unknown as Record<string, unknown>).shopify as Record<string, unknown> | undefined;
+    const s = (window as unknown as Record<string, unknown>).shopify as
+      | Record<string, unknown>
+      | undefined;
     if (s && typeof s.idToken === 'function') return s as unknown as ShopifyGlobal;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
@@ -54,10 +70,16 @@ async function waitForShopifyGlobal(maxWaitMs = 3000): Promise<ShopifyGlobal | n
 
 // ─── Stored-token polling ─────────────────────────────────────────────────────
 
-async function pollForStoredToken(maxWaitMs = 1500): Promise<string | null> {
+/**
+ * Poll sessionStorage for up to maxWaitMs.
+ * 100 ms is enough: Path 0 (URL read) already handles the initial race
+ * between Providers.tsx and the first API call, so if the token isn't in
+ * storage within one tick it isn't coming via that route.
+ */
+async function pollForStoredToken(maxWaitMs = 100): Promise<string | null> {
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const token = getStoredInitialToken();
+    const token = getStoredTokenIfFresh();
     if (token) return token;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
@@ -73,37 +95,45 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-// ─── RPC retry helper ────────────────────────────────────────────────────────
+// ─── RPC deduplification & retry ─────────────────────────────────────────────
+
+/**
+ * Shared promise for in-flight idToken() calls.
+ *
+ * When multiple API calls fire simultaneously and all need a fresh token
+ * (e.g. dashboard Promise.all after expiry), they share a single RPC call
+ * instead of each racing into idToken() independently.
+ */
+let _inflightTokenFetch: Promise<string> | null = null;
 
 function isRpcNotReadyError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('Host did not expose RPC');
 }
 
-/**
- * Call shopify.idToken() and retry if the RPC channel isn't established yet.
- *
- * "Host did not expose RPC" is transient: it fires when the App Bridge CDN
- * script loads on a redirected page and our code calls idToken() before the
- * postMessage handshake between the iframe and Shopify Admin completes (usually
- * within a few hundred milliseconds).  Three retries with increasing back-off
- * cover the window without adding perceptible latency in the normal path.
- */
 async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await withTimeout(shopify.idToken(), 5_000);
-    } catch (err) {
-      if (isRpcNotReadyError(err) && attempt < maxAttempts) {
-        // Back off: 400 ms, 800 ms
-        await new Promise(resolve => setTimeout(resolve, attempt * 400));
-        continue;
+  if (_inflightTokenFetch) return _inflightTokenFetch;
+
+  _inflightTokenFetch = (async () => {
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const token = await withTimeout(shopify.idToken(), 5_000);
+        storeInitialToken(token);
+        return token;
+      } catch (err) {
+        if (isRpcNotReadyError(err) && attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 400));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
-  }
-  // Unreachable — TypeScript needs a return/throw after the loop
-  throw new Error('idTokenWithRetry: max attempts exceeded');
+    throw new Error('idTokenWithRetry: max attempts exceeded');
+  })().finally(() => {
+    _inflightTokenFetch = null;
+  });
+
+  return _inflightTokenFetch;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -112,18 +142,23 @@ async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
  * Get a Shopify session token for authenticating backend requests.
  *
  * Strategy (in order):
- *  0. id_token still present in the current URL — fastest path, no RPC needed.
- *     Shopify Admin always injects id_token into the initial embed URL.
- *  1. id_token stored in sessionStorage from a previous URL load.
- *  2. window.shopify.idToken() — RPC call to Shopify Admin, retried up to 3×
- *     to tolerate the "Host did not expose RPC" transient error that occurs
- *     when the App Bridge CDN reinitialises after a server-side redirect.
+ *
+ *  0. id_token still in the current URL (first load from Shopify Admin).
+ *     No RPC needed; eliminates the Providers.tsx useEffect race condition.
+ *
+ *  1. Cached token in sessionStorage, issued < 9 minutes ago.
+ *     Fast path for all navigations within a session.
+ *
+ *  2. Proactive refresh via window.shopify.idToken() (RPC).
+ *     Runs automatically when the cached token is ≥9 min old — well before
+ *     the backend's ≈11-minute cutoff.  Also runs after a 401 forces
+ *     invalidateStoredToken().  Multiple concurrent callers share one RPC
+ *     call via the _inflightTokenFetch deduplication above.
+ *
+ * Result: zero "please refresh" errors in normal embedded-app usage.
  */
 export async function getSessionToken(): Promise<string> {
-  // ── Path 0: id_token still in the current page URL ──────────────────────
-  // This is true for every first load from Shopify Admin. Reading it here
-  // (rather than waiting for Providers.tsx useEffect) eliminates the race
-  // condition and means idToken() is never called on the initial render.
+  // ── Path 0: id_token in the current page URL ─────────────────────────────
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get('id_token');
@@ -133,11 +168,11 @@ export async function getSessionToken(): Promise<string> {
     }
   }
 
-  // ── Path 1: token already cached from a prior call ───────────────────────
-  const stored = await pollForStoredToken(1500);
+  // ── Path 1: fresh cached token ────────────────────────────────────────────
+  const stored = await pollForStoredToken(100);
   if (stored) return stored;
 
-  // ── Path 2: ask App Bridge CDN for a fresh token via RPC ─────────────────
+  // ── Path 2: live RPC call (proactive refresh or post-invalidation) ────────
   const shopify = await waitForShopifyGlobal(3000);
   if (!shopify) {
     throw new Error(
@@ -146,9 +181,7 @@ export async function getSessionToken(): Promise<string> {
   }
 
   try {
-    const token = await idTokenWithRetry(shopify);
-    storeInitialToken(token);
-    return token;
+    return await idTokenWithRetry(shopify);
   } catch (err) {
     if (isRpcNotReadyError(err)) {
       throw new Error(
