@@ -1,8 +1,6 @@
 /**
  * Shopify session token utilities.
  * Uses window.shopify (CDN injected by Shopify Admin) — no npm App Bridge init.
- * The npm createApp() call throws INVALID_ORIGIN in some embed contexts; the
- * CDN global is always available and does not have this issue.
  */
 
 // ─── Token storage ────────────────────────────────────────────────────────────
@@ -26,7 +24,9 @@ function getStoredInitialToken(): string | null {
     const token = sessionStorage.getItem('_pleero_id_token');
     const ts = sessionStorage.getItem('_pleero_id_token_ts');
     if (!token || !ts) return null;
-    if (Date.now() - Number(ts) > 50_000) return null; // 50 s < 60 s token TTL
+    // Backend has leeway=30, so tokens up to 90s old are accepted.
+    // Use 85s here to stay safely within that window.
+    if (Date.now() - Number(ts) > 85_000) return null;
     return token;
   } catch {
     return null;
@@ -34,8 +34,6 @@ function getStoredInitialToken(): string | null {
 }
 
 // ─── Host storage ─────────────────────────────────────────────────────────────
-// Shopify's host param disappears after navigation — persist it so the fallback
-// can still init if window.shopify is unexpectedly unavailable.
 
 export function storeHost(host: string): void {
   try { sessionStorage.setItem('_pleero_host', host); } catch { /* */ }
@@ -57,9 +55,6 @@ async function waitForShopifyGlobal(maxWaitMs = 3000): Promise<ShopifyGlobal | n
 }
 
 // ─── Stored-token polling ─────────────────────────────────────────────────────
-// React runs child useEffects before parent, so Providers.tsx stores the
-// id_token slightly after a child page calls getSessionToken(). Polling bridges
-// the gap without ever waiting more than a couple of React ticks.
 
 async function pollForStoredToken(maxWaitMs = 1500): Promise<string | null> {
   const deadline = Date.now() + maxWaitMs;
@@ -75,9 +70,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Session token request timed out — try refreshing')), ms),
+      setTimeout(() => reject(new Error('Session token request timed out')), ms),
     ),
   ]);
+}
+
+// ─── Silent reload (inside Shopify Admin iframe only) ────────────────────────
+// When idToken() fails due to "Host did not expose RPC", Shopify Admin will
+// inject a fresh id_token on reload. Guard prevents infinite loops when the
+// app is accessed directly (no parent frame).
+
+function reloadForFreshToken(): Promise<never> {
+  if (typeof window !== 'undefined' && window.parent !== window) {
+    window.location.reload();
+  }
+  return new Promise(() => {}); // never resolves — page is reloading
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -86,8 +93,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * Get a fresh Shopify session token for authenticating backend requests.
  *
  * Strategy:
- *  1. Stored id_token from initial embed URL (valid ≤50 s)
+ *  1. Stored id_token from initial embed URL (valid ≤85 s per backend leeway)
  *  2. window.shopify.idToken() — CDN injected by Shopify Admin
+ *  3. Silent reload inside iframe so Shopify Admin injects a fresh token
  */
 export async function getSessionToken(): Promise<string> {
   const stored = await pollForStoredToken(1500);
@@ -100,9 +108,11 @@ export async function getSessionToken(): Promise<string> {
       storeInitialToken(token);
       return token;
     } catch (err) {
-      console.warn('[Pleero] window.shopify.idToken() failed:', err);
+      console.warn('[Pleero] window.shopify.idToken() failed, reloading for fresh token:', err);
+      return reloadForFreshToken();
     }
   }
 
+  // Only reached when accessed directly outside Shopify Admin
   throw new Error('Unable to authenticate. Try refreshing the page.');
 }
