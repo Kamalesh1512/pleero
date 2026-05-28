@@ -174,10 +174,14 @@ async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
  */
 export async function getSessionToken(): Promise<string> {
   // ── Path 0: id_token in URL (first load from Shopify Admin) ──────────────
+  // Note: App Bridge CDN script strips id_token from the URL via
+  // history.replaceState before React hydrates, so this path is only reached
+  // when App Bridge has NOT yet consumed the token (very narrow window).
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get('id_token');
     if (urlToken && urlToken !== _burnedUrlToken) {
+      console.debug('[pleero:auth] token via path-0 (URL id_token)');
       storeInitialToken(urlToken);
       return urlToken;
     }
@@ -185,25 +189,32 @@ export async function getSessionToken(): Promise<string> {
 
   // ── Path 1: fresh cached token ────────────────────────────────────────────
   const stored = await pollForStoredToken(100);
-  if (stored) return stored;
+  if (stored) {
+    console.debug('[pleero:auth] token via path-1 (sessionStorage cache)');
+    return stored;
+  }
 
   // ── Path 2: live RPC call ─────────────────────────────────────────────────
+  console.debug('[pleero:auth] path-2: waiting for window.shopify RPC…');
   const shopify = await waitForShopifyGlobal();
   if (!shopify) {
+    console.warn('[pleero:auth] path-2 failed: window.shopify unavailable after 10 s');
     throw new Error(
       'Shopify App Bridge not available. Open this app from your Shopify Admin.',
     );
   }
 
   try {
-    return await idTokenWithRetry(shopify);
+    const token = await idTokenWithRetry(shopify);
+    console.debug('[pleero:auth] token via path-2 (live RPC)');
+    return token;
   } catch (err) {
+    console.warn('[pleero:auth] path-2 RPC failed:', err);
     if (isRpcNotReadyError(err)) {
       throw new Error(
         'Shopify Admin RPC channel not ready. Please refresh the page inside Shopify Admin.',
       );
     }
-    console.warn('[Pleero] window.shopify.idToken() failed:', err);
     throw new Error(
       'Unable to authenticate with Shopify. Please refresh the page inside Shopify Admin.',
     );

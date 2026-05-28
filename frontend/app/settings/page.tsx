@@ -24,34 +24,36 @@ export default function Settings() {
   const [brandColor, setBrandColor] = useState('#000000');
   const [logoUrl, setLogoUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const merchant = await getMerchantSettings();
-        setBonusPercentage(merchant.bonus_percentage);
-        setBonusCapCents(merchant.bonus_cap_cents);
-        setMerchantEmail(merchant.merchant_email);
-        setBrandColor(merchant.brand_color);
-        setLogoUrl(merchant.logo_url || '');
-      } catch (err) {
-        const text =
-          err instanceof ApiError && err.status === 404
-            ? 'App setup incomplete. Please reinstall Pleero from the Shopify App Store.'
-            : err instanceof ApiError && err.status === 401
-              ? 'Authentication failed. Please refresh the page to reconnect.'
-              : err instanceof Error
-                ? err.message
-                : 'Failed to load settings';
-        setSaveMessage({ type: 'error', text });
-      } finally {
-        setLoading(false);
-      }
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const merchant = await getMerchantSettings();
+      setBonusPercentage(merchant.bonus_percentage);
+      setBonusCapCents(merchant.bonus_cap_cents);
+      setMerchantEmail(merchant.merchant_email);
+      setBrandColor(merchant.brand_color);
+      setLogoUrl(merchant.logo_url || '');
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError && err.status === 404
+          ? 'App setup incomplete. Please reinstall Pleero from the Shopify App Store.'
+          : err instanceof ApiError && err.status === 401
+            ? 'Authentication failed. Please refresh the page to reconnect.'
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load settings',
+      );
+    } finally {
+      setLoading(false);
     }
-    loadSettings();
   }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
 
   const handleFetchLogo = useCallback(async () => {
     try {
@@ -94,6 +96,22 @@ export default function Settings() {
       <AppFrame>
         <Page title="Settings">
           <Text as="p">Loading settings...</Text>
+        </Page>
+      </AppFrame>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <AppFrame>
+        <Page title="Settings">
+          <Banner
+            tone="critical"
+            title="Failed to load settings"
+            action={{ content: 'Retry', onAction: loadSettings }}
+          >
+            <Text as="p">{loadError}</Text>
+          </Banner>
         </Page>
       </AppFrame>
     );

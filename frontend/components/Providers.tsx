@@ -1,6 +1,6 @@
 'use client';
 
-import { AppProvider, Spinner } from '@shopify/polaris';
+import { AppProvider, Spinner, Banner, Page } from '@shopify/polaris';
 import enTranslations from '@shopify/polaris/locales/en.json';
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect, useState } from 'react';
@@ -19,9 +19,17 @@ import { getSessionToken, storeHost } from '@/lib/shopify-app-bridge';
  * Embedded-app detection: Shopify Admin always includes `host` or `id_token`
  * in the URL when opening an embedded app.  Public pages (landing, legal)
  * have neither, so they are never blocked.
+ *
+ * Race condition guard: if getSessionToken() fails (e.g. RPC handshake not
+ * ready, budget exhausted) we show an explicit error rather than silently
+ * rendering pages without a cached token.  Without this guard every child
+ * page falls through to Path 2 (live RPC) on its own, producing a 1-30 s
+ * "Loading…" freeze because App Bridge strips id_token from the URL before
+ * React hydrates — Path 0 is never available on a hard refresh.
  */
 export default function Providers({ children }: PropsWithChildren) {
   const [tokenReady, setTokenReady] = useState(false);
+  const [authError, setAuthError] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -36,19 +44,21 @@ export default function Providers({ children }: PropsWithChildren) {
       return;
     }
 
-    // Pre-fetch the token so it lands in sessionStorage before any page
-    // useEffect runs.  Failures are silenced here; pages surface their own
-    // auth errors if they subsequently can't get a token.
+    // Pre-fetch the token so it lands in sessionStorage before any child
+    // page useEffect runs.  On failure, surface an error UI with a reload
+    // option instead of silently rendering pages that will also fail and
+    // show their own prolonged "Loading…" state.
     getSessionToken()
-      .catch(() => {})
-      .finally(() => setTokenReady(true));
+      .then(() => setTokenReady(true))
+      .catch(() => {
+        setAuthError(true);
+        setTokenReady(true);
+      });
   }, []);
 
-  return (
-    <AppProvider i18n={enTranslations}>
-      {tokenReady ? (
-        children
-      ) : (
+  if (!tokenReady) {
+    return (
+      <AppProvider i18n={enTranslations}>
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -57,7 +67,32 @@ export default function Providers({ children }: PropsWithChildren) {
         }}>
           <Spinner accessibilityLabel="Loading Pleero" size="large" />
         </div>
-      )}
+      </AppProvider>
+    );
+  }
+
+  if (authError) {
+    return (
+      <AppProvider i18n={enTranslations}>
+        <Page title="Authentication Error">
+          <Banner
+            tone="critical"
+            title="Unable to connect to Shopify"
+            action={{ content: 'Reload', onAction: () => window.location.reload() }}
+          >
+            <p>
+              Pleero must be opened from within your Shopify Admin. If you are
+              already in Shopify Admin, try reloading the page.
+            </p>
+          </Banner>
+        </Page>
+      </AppProvider>
+    );
+  }
+
+  return (
+    <AppProvider i18n={enTranslations}>
+      {children}
     </AppProvider>
   );
 }
