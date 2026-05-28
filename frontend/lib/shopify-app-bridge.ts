@@ -110,25 +110,37 @@ function isRpcNotReadyError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('Host did not expose RPC');
 }
 
+/**
+ * Retry idToken() until the Shopify Admin RPC channel is ready.
+ *
+ * On first page load the embedded-app iframe and its parent frame need a
+ * moment to exchange a handshake via postMessage. Until the handshake
+ * completes, idToken() rejects immediately with "Host did not expose RPC".
+ * The channel typically becomes ready within 1–3 s, so we poll every 500 ms
+ * for up to 15 s before giving up.  All concurrent callers share the same
+ * in-flight promise via _inflightTokenFetch so only one RPC call is in
+ * flight at a time.
+ */
 async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
   if (_inflightTokenFetch) return _inflightTokenFetch;
 
   _inflightTokenFetch = (async () => {
-    const maxAttempts = 3;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const RPC_BUDGET_MS = 15_000;
+    const startTime = Date.now();
+
+    while (true) {
       try {
         const token = await withTimeout(shopify.idToken(), 5_000);
         storeInitialToken(token);
         return token;
       } catch (err) {
-        if (isRpcNotReadyError(err) && attempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 400));
+        if (isRpcNotReadyError(err) && Date.now() - startTime < RPC_BUDGET_MS) {
+          await new Promise(resolve => setTimeout(resolve, 500));
           continue;
         }
         throw err;
       }
     }
-    throw new Error('idTokenWithRetry: max attempts exceeded');
   })().finally(() => {
     _inflightTokenFetch = null;
   });
