@@ -23,6 +23,9 @@ export class ApiError extends Error {
 
 // ─── Internal fetch helper ────────────────────────────────────────────────────
 
+// Hard abort after this many ms — prevents infinite "Loading..." on slow/dead backends.
+const FETCH_TIMEOUT_MS = 30_000;
+
 async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
   const token = await getAppBridgeSessionToken();
   const headers = {
@@ -30,16 +33,44 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   };
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(tid);
+  }
+
   if (res.status !== 401) return res;
 
   // Token was rejected — invalidate cache, get a genuinely fresh one, retry once
   invalidateStoredToken();
   const freshToken = await getAppBridgeSessionToken();
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: { ...headers, Authorization: `Bearer ${freshToken}` },
-  });
+
+  const retryController = new AbortController();
+  const retryTid = setTimeout(() => retryController.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: { ...headers, Authorization: `Bearer ${freshToken}` },
+      signal: retryController.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(retryTid);
+  }
 }
 
 function throwApiError(res: Response, context: string): never {
