@@ -12,6 +12,7 @@ import {
   Thumbnail,
   InlineStack,
   Button,
+  Spinner,
 } from '@shopify/polaris';
 import { useState, useCallback, useEffect } from 'react';
 import { getMerchantSettings, updateMerchantSettings, getShopLogo, ApiError } from '@/lib/api';
@@ -95,7 +96,9 @@ export default function Settings() {
     return (
       <AppFrame>
         <Page title="Settings">
-          <Text as="p">Loading settings...</Text>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner accessibilityLabel="Loading settings" size="large" />
+          </div>
         </Page>
       </AppFrame>
     );

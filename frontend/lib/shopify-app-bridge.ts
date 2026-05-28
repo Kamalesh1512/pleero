@@ -183,6 +183,11 @@ export async function getSessionToken(): Promise<string> {
     if (urlToken && urlToken !== _burnedUrlToken) {
       console.debug('[pleero:auth] token via path-0 (URL id_token)');
       storeInitialToken(urlToken);
+      // Remove id_token from the URL so it can't be replayed across navigations.
+      const cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete('id_token');
+      const qs = cleanParams.toString();
+      history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
       return urlToken;
     }
   }

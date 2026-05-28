@@ -1,6 +1,6 @@
 'use client';
 
-import { Page, Card, Layout, Text, BlockStack, Banner, Button } from '@shopify/polaris';
+import { Page, Card, Layout, Text, BlockStack, Banner, Button, Spinner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
 import { getMerchantSettings, activateBilling, ApiError, type Merchant } from '@/lib/api';
@@ -51,7 +51,9 @@ export default function BillingPage() {
     return (
       <AppFrame>
         <Page title="Billing">
-          <Text as="p">Loading billing information...</Text>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner accessibilityLabel="Loading billing" size="large" />
+          </div>
         </Page>
       </AppFrame>
     );

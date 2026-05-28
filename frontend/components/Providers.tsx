@@ -44,6 +44,16 @@ export default function Providers({ children }: PropsWithChildren) {
       return;
     }
 
+    // Guard: if the API key meta is missing or empty, window.shopify never
+    // initializes and idToken() hangs indefinitely — fail fast instead.
+    const apiKeyMeta = document.querySelector('meta[name="shopify-api-key"]');
+    if (!apiKeyMeta?.getAttribute('content')) {
+      console.error('[pleero:auth] shopify-api-key meta tag missing or empty');
+      setAuthError(true);
+      setTokenReady(true);
+      return;
+    }
+
     // Pre-fetch the token so it lands in sessionStorage before any child
     // page useEffect runs.  On failure, surface an error UI with a reload
     // option instead of silently rendering pages that will also fail and

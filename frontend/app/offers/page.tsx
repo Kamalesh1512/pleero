@@ -1,6 +1,6 @@
 'use client';
 
-import { Page, Card, Layout, Text, BlockStack, Badge, DataTable, Banner } from '@shopify/polaris';
+import { Page, Card, Layout, Text, BlockStack, Badge, DataTable, Banner, Spinner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
 import { getMerchantOffers, formatCurrency, ApiError, type MerchantOffer } from '@/lib/api';
@@ -52,7 +52,11 @@ export default function OffersPage() {
   if (loading) {
     return (
       <AppFrame>
-        <Page title="Offers"><Text as="p">Loading offers...</Text></Page>
+        <Page title="Offers">
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner accessibilityLabel="Loading offers" size="large" />
+          </div>
+        </Page>
       </AppFrame>
     );
   }

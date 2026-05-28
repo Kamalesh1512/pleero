@@ -1,6 +1,6 @@
 'use client';
 
-import { Page, Card, Layout, Text, BlockStack, Banner } from '@shopify/polaris';
+import { Page, Card, Layout, Text, BlockStack, Banner, Spinner } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import {
   formatCurrency,
@@ -106,7 +106,11 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <AppFrame>
-        <Page title="Dashboard"><Text as="p">Loading...</Text></Page>
+        <Page title="Dashboard">
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner accessibilityLabel="Loading dashboard" size="large" />
+          </div>
+        </Page>
       </AppFrame>
     );
   }

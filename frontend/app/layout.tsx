@@ -18,9 +18,6 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  other: {
-    'shopify-api-key': process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ?? '',
-  },
   title: "Pleero – Turn Refunds Into Store Credit | Shopify App",
   description: "Pleero automatically offers customers bonus store credit instead of cash refunds. Keep 15–25% of refund revenue in your store. 14-day free trial. No code required.",
   keywords: "shopify refunds, store credit app, refund retention, return to store credit, shopify returns app, revenue retention shopify",
@@ -70,6 +67,10 @@ export default function RootLayout({
         <meta name="shopify-api-key" content={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ?? ''} />
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+        {/* Strip id_token from the URL after App Bridge has consumed it.
+            Leaving it in the URL allows the token to be reused across navigations,
+            which Shopify treats as a replay attack and rejects with 401. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var p=new URLSearchParams(location.search);if(p.has('id_token')){p.delete('id_token');var s=p.toString();history.replaceState(null,'',location.pathname+(s?'?'+s:'')+location.hash);}})();` }} />
       </head>
       <body>
         <Providers>{children}</Providers>
