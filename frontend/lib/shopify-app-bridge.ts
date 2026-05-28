@@ -55,7 +55,7 @@ export function storeHost(host: string): void {
 
 type ShopifyGlobal = { idToken: () => Promise<string> };
 
-async function waitForShopifyGlobal(maxWaitMs = 3000): Promise<ShopifyGlobal | null> {
+async function waitForShopifyGlobal(maxWaitMs = 10_000): Promise<ShopifyGlobal | null> {
   if (typeof window === 'undefined') return null;
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
@@ -107,7 +107,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 let _inflightTokenFetch: Promise<string> | null = null;
 
 function isRpcNotReadyError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes('Host did not expose RPC');
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  // Match: Shopify's own RPC errors AND our withTimeout fallback.
+  // "timed out" means idToken() was still waiting for the handshake when we
+  // cut it — we should keep retrying, not give up.
+  return (
+    msg.includes('host did not expose rpc') ||
+    msg.includes('host does not support') ||
+    msg.includes('rpc') ||
+    msg.includes('timed out')
+  );
 }
 
 /**
@@ -125,12 +135,12 @@ async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
   if (_inflightTokenFetch) return _inflightTokenFetch;
 
   _inflightTokenFetch = (async () => {
-    const RPC_BUDGET_MS = 15_000;
+    const RPC_BUDGET_MS = 30_000;
     const startTime = Date.now();
 
     while (true) {
       try {
-        const token = await withTimeout(shopify.idToken(), 5_000);
+        const token = await withTimeout(shopify.idToken(), 10_000);
         storeInitialToken(token);
         return token;
       } catch (err) {
