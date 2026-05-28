@@ -60,6 +60,21 @@ class Merchant(Base, TimestampMixin):
         nullable=False,
     )
 
+    # Expiring offline token support (Shopify requirement from April 2026).
+    # refresh_token_encrypted: Fernet-encrypted refresh token (90-day lifetime).
+    # access_token_expires_at: UTC timestamp when the current access token expires.
+    # Both are NULL for old non-expiring tokens; the refresh flow auto-populates
+    # them on next OAuth callback or token refresh.
+    refresh_token_encrypted: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        nullable=True,
+    )
+
+    access_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     subscription_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,

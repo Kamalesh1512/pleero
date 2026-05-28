@@ -250,7 +250,7 @@ async def get_shop_logo(
         logo_url: CDN URL of the shop logo, or null if not set
     """
     import httpx
-    from app.core.encryption import decrypt_token
+    from app.utils.shopify_auth import get_valid_access_token
 
     result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
@@ -258,7 +258,7 @@ async def get_shop_logo(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    access_token = decrypt_token(merchant.access_token_encrypted)
+    access_token = await get_valid_access_token(merchant, db)
 
     query = """
     query {
