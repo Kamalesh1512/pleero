@@ -27,6 +27,9 @@ export class ApiError extends Error {
 const FETCH_TIMEOUT_MS = 30_000;
 
 async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const fullUrl = `${API_BASE_URL}${path}`;
+
   const token = await getAppBridgeSessionToken();
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -34,37 +37,47 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
     ...(init.headers as Record<string, string> | undefined),
   };
 
+  console.debug('[pleero:api] →', method, path);
+
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, signal: controller.signal });
+    res = await fetch(fullUrl, { ...init, headers, signal: controller.signal });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
+      console.warn('[pleero:api] ← TIMEOUT', method, path);
       throw new Error('Request timed out. Please check your connection and try again.');
     }
+    console.warn('[pleero:api] ← NETWORK ERROR', method, path, err);
     throw err;
   } finally {
     clearTimeout(tid);
   }
 
+  console.debug('[pleero:api] ←', res.status, method, path);
+
   if (res.status !== 401) return res;
 
-  // Token was rejected — invalidate cache, get a genuinely fresh one, retry once
+  // Token was rejected — invalidate cache, get a genuinely fresh one, retry once.
+  console.warn('[pleero:api] 401 on', method, path, '— refreshing token and retrying');
   invalidateStoredToken();
   const freshToken = await getAppBridgeSessionToken();
 
   const retryController = new AbortController();
   const retryTid = setTimeout(() => retryController.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetch(`${API_BASE_URL}${path}`, {
+    const retryRes = await fetch(fullUrl, {
       ...init,
       headers: { ...headers, Authorization: `Bearer ${freshToken}` },
       signal: retryController.signal,
     });
+    console.debug('[pleero:api] ← retry', retryRes.status, method, path);
+    return retryRes;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
+      console.warn('[pleero:api] ← TIMEOUT on retry', method, path);
       throw new Error('Request timed out. Please check your connection and try again.');
     }
     throw err;
