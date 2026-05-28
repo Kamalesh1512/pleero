@@ -21,7 +21,16 @@ export function storeInitialToken(token: string): void {
   } catch { /* sessionStorage unavailable */ }
 }
 
+// Track URL id_token already seen so Path 0 doesn't reuse it after a 401.
+// A module-level variable survives client-side navigation without a page reload.
+let _burnedUrlToken: string | null = null;
+
 export function invalidateStoredToken(): void {
+  // Mark the current URL's id_token as burned so Path 0 won't reuse it.
+  if (typeof window !== 'undefined') {
+    const urlToken = new URLSearchParams(window.location.search).get('id_token');
+    if (urlToken) _burnedUrlToken = urlToken;
+  }
   try {
     sessionStorage.removeItem('_pleero_id_token');
     sessionStorage.removeItem('_pleero_id_token_ts');
@@ -70,12 +79,6 @@ async function waitForShopifyGlobal(maxWaitMs = 10_000): Promise<ShopifyGlobal |
 
 // ─── Stored-token polling ─────────────────────────────────────────────────────
 
-/**
- * Poll sessionStorage for up to maxWaitMs.
- * 100 ms is enough: Path 0 (URL read) already handles the initial race
- * between Providers.tsx and the first API call, so if the token isn't in
- * storage within one tick it isn't coming via that route.
- */
 async function pollForStoredToken(maxWaitMs = 100): Promise<string | null> {
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
@@ -100,18 +103,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 /**
  * Shared promise for in-flight idToken() calls.
  *
- * When multiple API calls fire simultaneously and all need a fresh token
- * (e.g. dashboard Promise.all after expiry), they share a single RPC call
- * instead of each racing into idToken() independently.
+ * When multiple API calls fire simultaneously (e.g. dashboard Promise.all),
+ * they share a single RPC call instead of each racing independently.
  */
 let _inflightTokenFetch: Promise<string> | null = null;
 
 function isRpcNotReadyError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
-  // Match: Shopify's own RPC errors AND our withTimeout fallback.
+  // Match Shopify's own RPC errors AND our withTimeout fallback.
   // "timed out" means idToken() was still waiting for the handshake when we
-  // cut it — we should keep retrying, not give up.
+  // cut it — keep retrying, don't give up.
   return (
     msg.includes('host did not expose rpc') ||
     msg.includes('host does not support') ||
@@ -122,14 +124,8 @@ function isRpcNotReadyError(err: unknown): boolean {
 
 /**
  * Retry idToken() until the Shopify Admin RPC channel is ready.
- *
- * On first page load the embedded-app iframe and its parent frame need a
- * moment to exchange a handshake via postMessage. Until the handshake
- * completes, idToken() rejects immediately with "Host did not expose RPC".
- * The channel typically becomes ready within 1–3 s, so we poll every 500 ms
- * for up to 15 s before giving up.  All concurrent callers share the same
- * in-flight promise via _inflightTokenFetch so only one RPC call is in
- * flight at a time.
+ * Retries every 500 ms for up to 30 s.  All concurrent callers share the
+ * same in-flight promise so only one RPC call is in flight at a time.
  */
 async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
   if (_inflightTokenFetch) return _inflightTokenFetch;
@@ -166,25 +162,22 @@ async function idTokenWithRetry(shopify: ShopifyGlobal): Promise<string> {
  * Strategy (in order):
  *
  *  0. id_token still in the current URL (first load from Shopify Admin).
- *     No RPC needed; eliminates the Providers.tsx useEffect race condition.
+ *     Skipped if the token was already used and led to a 401 (burned).
  *
  *  1. Cached token in sessionStorage, issued < 9 minutes ago.
  *     Fast path for all navigations within a session.
  *
- *  2. Proactive refresh via window.shopify.idToken() (RPC).
- *     Runs automatically when the cached token is ≥9 min old — well before
- *     the backend's ≈11-minute cutoff.  Also runs after a 401 forces
- *     invalidateStoredToken().  Multiple concurrent callers share one RPC
- *     call via the _inflightTokenFetch deduplication above.
- *
- * Result: zero "please refresh" errors in normal embedded-app usage.
+ *  2. Live RPC call via window.shopify.idToken().
+ *     Runs on first load (no cached token) or after a 401 invalidation.
+ *     Retries for up to 30 s while the iframe handshake establishes.
+ *     All concurrent callers share one RPC call (_inflightTokenFetch).
  */
 export async function getSessionToken(): Promise<string> {
-  // ── Path 0: id_token in the current page URL ─────────────────────────────
+  // ── Path 0: id_token in URL (first load from Shopify Admin) ──────────────
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get('id_token');
-    if (urlToken) {
+    if (urlToken && urlToken !== _burnedUrlToken) {
       storeInitialToken(urlToken);
       return urlToken;
     }
@@ -194,8 +187,8 @@ export async function getSessionToken(): Promise<string> {
   const stored = await pollForStoredToken(100);
   if (stored) return stored;
 
-  // ── Path 2: live RPC call (proactive refresh or post-invalidation) ────────
-  const shopify = await waitForShopifyGlobal(3000);
+  // ── Path 2: live RPC call ─────────────────────────────────────────────────
+  const shopify = await waitForShopifyGlobal();
   if (!shopify) {
     throw new Error(
       'Shopify App Bridge not available. Open this app from your Shopify Admin.',
@@ -215,4 +208,13 @@ export async function getSessionToken(): Promise<string> {
       'Unable to authenticate with Shopify. Please refresh the page inside Shopify Admin.',
     );
   }
+}
+
+// ─── Module-level pre-warm ────────────────────────────────────────────────────
+// Kick off the RPC handshake at module evaluation time — before React renders
+// any component. By the time the first page's useEffect fires, the token is
+// either already cached or the handshake is further along, cutting perceived
+// first-load delay on every page.
+if (typeof window !== 'undefined') {
+  getSessionToken().catch(() => { /* pre-warm failures are silent; pages handle their own errors */ });
 }
