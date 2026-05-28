@@ -150,22 +150,28 @@ async def callback(
     # Delete used state token
     await redis_client.delete(f"oauth_state:{state}")
 
-    # Exchange code for access token
-    access_token = await exchange_code_for_token(shop, code)
-    if not access_token:
-        logger.error(
-            "oauth_callback_token_exchange_failed",
-            shop=shop,
-        )
+    # Exchange code for an expiring offline access token (expiring=1).
+    # Returns access_token (1h TTL), refresh_token (90d TTL), expires_at.
+    token_result = await exchange_code_for_token(shop, code)
+    if not token_result:
+        logger.error("oauth_callback_token_exchange_failed", shop=shop)
         raise HTTPException(
             status_code=500,
             detail="Failed to exchange code for token",
         )
 
-    # Encrypt access token (hard rule #2)
-    encrypted_token = encrypt_token(access_token)
+    access_token = token_result["access_token"]
 
-    # Fetch shop details from Shopify (used in customer-facing emails and credit issuance)
+    # Encrypt tokens at rest (hard rule #2)
+    encrypted_token = encrypt_token(access_token)
+    encrypted_refresh = (
+        encrypt_token(token_result["refresh_token"])
+        if token_result["refresh_token"]
+        else None
+    )
+    token_expires_at = token_result["expires_at"]
+
+    # Fetch shop details from Shopify (used in emails and credit issuance)
     shop_name: str | None = None
     shop_currency: str = "USD"
     try:
@@ -186,27 +192,25 @@ async def callback(
     merchant = result.scalar_one_or_none()
 
     if merchant:
-        # Update existing merchant
         merchant.access_token_encrypted = encrypted_token
+        merchant.refresh_token_encrypted = encrypted_refresh
+        merchant.access_token_expires_at = token_expires_at
         merchant.subscription_status = SubscriptionStatus.TRIAL
         merchant.trial_ends_at = datetime.now(UTC) + timedelta(days=14)
         if shop_name:
             merchant.shop_name = shop_name
         merchant.currency = shop_currency
 
-        logger.info(
-            "merchant_reinstalled",
-            shop=shop,
-            merchant_id=str(merchant.id),
-        )
+        logger.info("merchant_reinstalled", shop=shop, merchant_id=str(merchant.id))
     else:
-        # Create new merchant
         merchant = Merchant(
             shop_domain=shop,
             access_token_encrypted=encrypted_token,
+            refresh_token_encrypted=encrypted_refresh,
+            access_token_expires_at=token_expires_at,
             subscription_status=SubscriptionStatus.TRIAL,
             trial_ends_at=datetime.now(UTC) + timedelta(days=14),
-            merchant_email=f"merchant@{shop}",  # Placeholder, will be updated in settings
+            merchant_email=f"merchant@{shop}",
             bonus_percentage=10,
             bonus_cap_cents=5000,
             brand_color="#000000",
@@ -215,11 +219,7 @@ async def callback(
         )
         db.add(merchant)
 
-        logger.info(
-            "merchant_created",
-            shop=shop,
-            merchant_id=str(merchant.id),
-        )
+        logger.info("merchant_created", shop=shop, merchant_id=str(merchant.id))
 
     await db.commit()
 

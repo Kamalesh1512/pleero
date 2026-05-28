@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.encryption import decrypt_token
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
+from app.utils.shopify_auth import get_valid_access_token
 
 logger = get_logger(__name__)
 
@@ -43,8 +43,8 @@ async def create_subscription(
         logger.error("merchant_not_found", merchant_id=str(merchant_id))
         return None
 
-    # Decrypt access token
-    access_token = decrypt_token(merchant.access_token_encrypted)
+    # Get a valid (auto-refreshed if near expiry) access token
+    access_token = await get_valid_access_token(merchant, db)
 
     # Create authenticated client
     client = httpx.AsyncClient(
@@ -197,8 +197,8 @@ async def get_subscription_status(
         logger.error("merchant_not_found", merchant_id=str(merchant_id))
         return SubscriptionStatus.CANCELLED
 
-    # Decrypt access token
-    access_token = decrypt_token(merchant.access_token_encrypted)
+    # Get a valid (auto-refreshed if near expiry) access token
+    access_token = await get_valid_access_token(merchant, db)
 
     # Create authenticated client
     client = httpx.AsyncClient(
