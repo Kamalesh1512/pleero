@@ -59,8 +59,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # origins (no wildcard).  We list every origin that the frontend can run on.
 _CORS_ORIGINS = [
     "https://pleero.app",
-    "https://app.pleero.app",  # if ever split to a subdomain
-    "http://localhost:3000",  # local development
+    "https://www.pleero.app",
+    "https://app.pleero.app",
+    "http://localhost:3000",
 ]
 app.add_middleware(
     CORSMiddleware,
