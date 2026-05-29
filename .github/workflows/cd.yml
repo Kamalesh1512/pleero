@@ -6,9 +6,17 @@
 #
 # Version scheme: pleero-MAJOR.MINOR.PATCH
 #   - Reads the latest git tag matching "pleero-*"
-#   - Increments the patch number on every main push
+#   - Increments the patch number only when deployable code changes
 #   - First-ever deploy uses pleero-1.0.0 (no prior tag needed)
 #   - The new tag is pushed to the repo so subsequent runs increment correctly
+#
+# Path gating (jobs only run when their files change):
+#   backend/**  docker-compose*.yml  → build-backend, deploy-backend
+#   frontend/**                       → deploy-frontend
+#   shopify.app.toml  extensions/**  → deploy-shopify-config
+#   any of the above                  → version (tag + Docker label)
+#
+# workflow_dispatch bypasses all path gates (forces a full redeploy).
 # =============================================================================
 
 name: CD - Continuous Deployment
@@ -31,11 +39,52 @@ env:
 
 jobs:
   # ===========================================================================
+  # DETECT WHICH PARTS OF THE CODEBASE CHANGED
+  # Runs on every trigger; all other jobs consult its outputs.
+  # workflow_dispatch forces all outputs to 'true' so a manual trigger
+  # always runs the full deployment.
+  # ===========================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend == 'true' }}
+      shopify: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.shopify == 'true' }}
+      any: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.any == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history required for accurate diff on squash merges
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'docker-compose*.yml'
+            frontend:
+              - 'frontend/**'
+            shopify:
+              - 'shopify.app.toml'
+              - 'extensions/**'
+            any:
+              - 'backend/**'
+              - 'docker-compose*.yml'
+              - 'frontend/**'
+              - 'shopify.app.toml'
+              - 'extensions/**'
+
+  # ===========================================================================
   # DETERMINE VERSION & CREATE GIT TAG
+  # Only runs (and tags) when something deployable actually changed.
   # ===========================================================================
   version:
     name: Determine Version
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     permissions:
       contents: write   # needed to push the version tag back to the repo
     outputs:
@@ -87,11 +136,15 @@ jobs:
 
   # ===========================================================================
   # BUILD & PUSH BACKEND DOCKER IMAGE
+  # Skipped when no backend/docker-compose files changed.
   # ===========================================================================
   build-backend:
     name: Build Backend Image
     runs-on: ubuntu-latest
-    needs: version
+    needs:
+      - changes
+      - version
+    if: needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
       packages: write
@@ -144,13 +197,16 @@ jobs:
 
   # ===========================================================================
   # DEPLOY BACKEND TO DIGITALOCEAN VPS
+  # Skipped when no backend/docker-compose files changed.
   # ===========================================================================
   deploy-backend:
     name: Deploy Backend to DigitalOcean
     runs-on: ubuntu-latest
     needs:
+      - changes
       - version
       - build-backend
+    if: needs.changes.outputs.backend == 'true'
     environment:
       name: production
       url: https://api.pleero.app
@@ -242,15 +298,24 @@ jobs:
 
   # ===========================================================================
   # SYNC SHOPIFY APP CONFIGURATION
-  # Runs after deploy-backend so webhook endpoints are live when registered.
+  # Only runs when shopify.app.toml or extensions/ change.
+  # Uses always() so it can inspect the deploy-backend result even when
+  # deploy-backend was skipped (backend unchanged, but shopify config changed).
   # Requires secret: SHOPIFY_CLI_PARTNERS_TOKEN
   # ===========================================================================
   deploy-shopify-config:
     name: Deploy Shopify App Config
     runs-on: ubuntu-latest
     needs:
+      - changes
       - version
       - deploy-backend
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.version.result == 'success' &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') &&
+      needs.changes.outputs.shopify == 'true'
     environment:
       name: production
     steps:
@@ -277,14 +342,22 @@ jobs:
 
   # ===========================================================================
   # DEPLOY FRONTEND TO VERCEL
-  # Runs in parallel with deploy-shopify-config (both need deploy-backend).
+  # Skipped when no frontend files changed.
+  # Uses always() so it can run even when deploy-backend was skipped.
   # ===========================================================================
   deploy-frontend:
     name: Deploy Frontend to Vercel
     runs-on: ubuntu-latest
     needs:
+      - changes
       - version
-      - deploy-backend   # frontend JS calls production API — backend must be live
+      - deploy-backend
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.version.result == 'success' &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') &&
+      needs.changes.outputs.frontend == 'true'
     environment:
       name: production
       url: https://pleero.app
@@ -318,8 +391,6 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          # These env vars override whatever Vercel pulled — ensures the build
-          # always uses the correct production values from GitHub secrets.
           NEXT_PUBLIC_API_URL: https://api.pleero.app
           NEXT_PUBLIC_SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
           NEXT_PUBLIC_GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
@@ -353,6 +424,7 @@ jobs:
     name: Deployment Complete
     runs-on: ubuntu-latest
     needs:
+      - changes
       - version
       - deploy-backend
       - deploy-shopify-config
@@ -365,22 +437,29 @@ jobs:
           SHOPIFY="${{ needs.deploy-shopify-config.result }}"
           FRONTEND="${{ needs.deploy-frontend.result }}"
           VERSION="${{ needs.version.outputs.version }}"
+          ANY_CHANGED="${{ needs.changes.outputs.any }}"
 
           echo "══════════════════════════════════════════"
-          echo " Pleero deployment summary — ${VERSION}"
+          echo " Pleero deployment summary — ${VERSION:-no-op}"
           echo "══════════════════════════════════════════"
           echo " Backend (DigitalOcean) : ${BACKEND}"
           echo " Shopify app config     : ${SHOPIFY}"
           echo " Frontend (Vercel)      : ${FRONTEND}"
           echo "══════════════════════════════════════════"
 
-          if [ "$BACKEND" = "success" ] && \
-             [ "$FRONTEND" = "success" ] && \
-             [ "$SHOPIFY" = "success" ]; then
-            echo "🎉 All deployments succeeded — version ${VERSION} is live"
-            echo "   https://pleero.app        (frontend)"
-            echo "   https://api.pleero.app    (backend)"
-          else
+          # If nothing deployable changed, report as no-op (not a failure)
+          if [ "$ANY_CHANGED" != "true" ]; then
+            echo "⏭️  No deployable files changed — all jobs skipped"
+            exit 0
+          fi
+
+          # Fail if any active deployment explicitly failed
+          if [ "$BACKEND" = "failure" ] || [ "$SHOPIFY" = "failure" ] || [ "$FRONTEND" = "failure" ]; then
             echo "❌ One or more deployments failed — check the logs above"
             exit 1
           fi
+
+          # At least one deployment ran — report success
+          echo "🎉 Deployment ${VERSION} complete"
+          echo "   https://pleero.app        (frontend)"
+          echo "   https://api.pleero.app    (backend)"

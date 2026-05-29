@@ -100,3 +100,6 @@ backups/
 *.key
 !scripts/*.sh
 ..pleero-backup.git/
+
+# Cloudflare Tunnel (contains account-specific tunnel UUID)
+pleero-config.yml

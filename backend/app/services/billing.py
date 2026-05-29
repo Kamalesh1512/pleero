@@ -58,12 +58,13 @@ async def create_subscription(
     try:
         # GraphQL mutation for recurring charge
         mutation = """
-        mutation appSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: String!, $trialDays: Int) {
+        mutation appSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: String!, $trialDays: Int, $test: Boolean) {
             appSubscriptionCreate(
                 name: $name
                 lineItems: $lineItems
                 returnUrl: $returnUrl
                 trialDays: $trialDays
+                test: $test
             ) {
                 appSubscription {
                     id
@@ -93,6 +94,7 @@ async def create_subscription(
             ],
             "returnUrl": f"{settings.API_BASE_URL}/api/billing/callback",
             "trialDays": 14,
+            "test": settings.BILLING_TEST_MODE,
         }
 
         url = f"https://{merchant.shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
@@ -118,10 +120,13 @@ async def create_subscription(
         user_errors = result.get("userErrors", [])
 
         if user_errors:
+            error_messages = [e.get("message", "") for e in user_errors]
             logger.error(
                 "create_subscription_user_errors",
                 merchant_id=str(merchant_id),
                 errors=user_errors,
+                messages=error_messages,
+                billing_test_mode=settings.BILLING_TEST_MODE,
             )
             return None
 
