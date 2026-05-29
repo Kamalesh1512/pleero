@@ -31,7 +31,12 @@ class Settings(BaseSettings):
     # Application
     APP_ENV: str = "production"  # Fail-closed: default to production for safety
     API_BASE_URL: str = "http://localhost:8000"
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "https://dev.pleero.app"
+
+    # Set True when testing billing on a Partner Development Store.
+    # Dev stores require test=true in the appSubscriptionCreate mutation or
+    # Shopify returns a user error. Never set True in real production.
+    BILLING_TEST_MODE: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

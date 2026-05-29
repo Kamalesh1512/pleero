@@ -45,10 +45,12 @@ services:
       - SHOPIFY_API_VERSION=2026-04
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
-      # - SENTRY_DSN=${SENTRY_DSN}
-      - APP_ENV=production
-      - API_BASE_URL=https://api.pleero.app
-      - FRONTEND_URL=https://pleero.app
+      - APP_ENV=development
+      - API_BASE_URL=https://api-dev.pleero.app
+      - FRONTEND_URL=https://dev.pleero.app
+      - BILLING_TEST_MODE=true
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app
     depends_on:

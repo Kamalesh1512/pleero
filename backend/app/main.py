@@ -61,7 +61,7 @@ _CORS_ORIGINS = [
     "https://pleero.app",
     "https://www.pleero.app",
     "https://app.pleero.app",
-    "http://localhost:3000",
+    "https://dev.pleero.app",
 ]
 app.add_middleware(
     CORSMiddleware,
