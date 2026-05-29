@@ -3,7 +3,7 @@
 name = "pleero"
 client_id = "1a1d6eff5b104d69eae630f9a43d8779"
 application_url = "https://pleero.app/dashboard"
-embedded = true
+embedded = false
 
 [access_scopes]
 # See: https://shopify.dev/docs/api/usage/access-scopes

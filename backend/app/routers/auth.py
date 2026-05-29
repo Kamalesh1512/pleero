@@ -5,9 +5,10 @@ Handles app installation and OAuth callback.
 
 import secrets
 from datetime import datetime, timedelta, UTC
+from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -20,6 +21,13 @@ from app.core.database import get_db
 from app.core.encryption import encrypt_token
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
+from app.utils.session_auth import (
+    COOKIE_NAME,
+    SESSION_TTL,
+    create_session,
+    get_current_shop,
+    revoke_session_for_shop,
+)
 from app.utils.shopify_auth import (
     verify_hmac,
     build_auth_url,
@@ -29,9 +37,10 @@ from app.utils.shopify_auth import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+api_router = APIRouter(prefix="/api/auth", tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
 
-# Redis client for state token storage
+# Redis client for OAuth state token storage (separate from session Redis in session_auth)
 redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
@@ -238,7 +247,48 @@ async def callback(
         webhooks_registered="via_toml",
     )
 
-    # Redirect to the app inside Shopify Admin.
-    # Going to /admin/apps lets Shopify Admin re-open the embedded app with
-    # a fresh host + id_token — avoids INVALID_ORIGIN on the npm App Bridge.
-    return RedirectResponse(url=f"https://{shop}/admin/apps")
+    # Create a Pleero session cookie so the frontend can authenticate without
+    # App Bridge session tokens.  The cookie is HttpOnly + Secure and scoped to
+    # api.pleero.app; same-site Lax means it is sent on cross-origin fetches
+    # from app.pleero.app (same eTLD+1) to api.pleero.app.
+    session_id = await create_session(shop)
+    is_prod = settings.APP_ENV == "production"
+
+    response = RedirectResponse(
+        url=f"{settings.FRONTEND_URL}/dashboard",
+        status_code=302,
+    )
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=SESSION_TTL,
+        path="/",
+    )
+    return response
+
+
+# ─── Authenticated session endpoints ─────────────────────────────────────────
+
+
+@api_router.get("/me")
+async def get_me(shop: str = Depends(get_current_shop)) -> dict[str, str]:
+    """Return the shop domain for the current session. Used by the frontend to
+    verify auth state on every page load."""
+    return {"shop": shop}
+
+
+@api_router.post("/logout")
+async def logout(
+    response: Response,
+    pleero_session: Annotated[str | None, Cookie()] = None,
+) -> dict[str, str]:
+    """Invalidate the session cookie and remove the Redis session."""
+    if pleero_session:
+        shop = await redis_client.get(f"session:{pleero_session}")
+        if shop:
+            await revoke_session_for_shop(shop)
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"status": "logged_out"}

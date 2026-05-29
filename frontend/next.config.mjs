@@ -4,24 +4,21 @@ const nextConfig = {
   // '@shopify/polaris/locales/en.json' through different module systems during
   // static generation, causing React.createContext to be called on an incomplete
   // React instance and crashing the SSR phase of every page.
-  // Official Shopify recommendation for Next.js App Router + Polaris v12+:
-  // https://polaris.shopify.com/
   transpilePackages: ['@shopify/polaris'],
 
   async headers() {
     return [
       {
-        // Apply to every route — the embedded pages need frame-ancestors and the
-        // public pages (landing, offers/[token]) benefit from the same policy.
         source: '/:path*',
         headers: [
-          // Allow Shopify Admin to embed the app. CSP frame-ancestors supersedes
-          // X-Frame-Options in all modern browsers; this is the only header needed.
+          // Prevent the app from being embedded in any external iframe.
+          // Pleero is now a standalone web app (not embedded in Shopify Admin).
           {
             key: 'Content-Security-Policy',
-            value:
-              "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com;",
+            value: "frame-ancestors 'self';",
           },
+          // Prevents MIME-type sniffing
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
     ];

@@ -4,77 +4,70 @@ import { AppProvider, Spinner, Banner, Page } from '@shopify/polaris';
 import enTranslations from '@shopify/polaris/locales/en.json';
 import '@shopify/polaris/build/esm/styles.css';
 import { PropsWithChildren, useEffect, useState } from 'react';
-import { getSessionToken, storeHost } from '@/lib/shopify-app-bridge';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pleero.app';
+
+// Pages that require an active Pleero session.  Public pages (landing, legal,
+// customer offer page) are NOT in this list and always render immediately.
+const APP_ROUTES = ['/dashboard', '/settings', '/offers', '/billing', '/analytics'];
 
 /**
- * Wraps the app in Polaris AppProvider and pre-fetches the Shopify session
- * token before any child page mounts.
+ * Wraps the app in Polaris AppProvider and verifies the Pleero session cookie
+ * before any protected page renders.
  *
- * Why: React fires useEffect bottom-up (children before parents). Without
- * this gate, every page's useEffect fires before the token is cached and
- * has to wait 1–3 s for the Shopify Admin RPC channel to establish.  By
- * blocking child rendering here, by the time any page's useEffect fires the
- * token is already in sessionStorage (Path 1 — instant lookup).
- *
- * Embedded-app detection: Shopify Admin always includes `host` or `id_token`
- * in the URL when opening an embedded app.  Public pages (landing, legal)
- * have neither, so they are never blocked.
- *
- * Race condition guard: if getSessionToken() fails (e.g. RPC handshake not
- * ready, budget exhausted) we show an explicit error rather than silently
- * rendering pages without a cached token.  Without this guard every child
- * page falls through to Path 2 (live RPC) on its own, producing a 1-30 s
- * "Loading…" freeze because App Bridge strips id_token from the URL before
- * React hydrates — Path 0 is never available on a hard refresh.
+ * Flow:
+ *  1. If the current path is not an app route → render immediately (public page).
+ *  2. Call GET /api/auth/me with credentials:'include'.
+ *     - 200 → session valid, render children.
+ *     - 401 → no/expired session.  If `shop` is in the URL (merchant clicked
+ *             the app from Shopify Admin) redirect to OAuth install so they get
+ *             a fresh session transparently.  Otherwise show the error UI.
+ *     - Network error → show error UI with Reload button.
  */
 export default function Providers({ children }: PropsWithChildren) {
-  const [tokenReady, setTokenReady] = useState(false);
-  const [authError, setAuthError] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
 
-    const host = params.get('host');
-    if (host) storeHost(host);
+    const pathname = window.location.pathname;
+    const isAppRoute = APP_ROUTES.some(r => pathname.startsWith(r));
 
-    // Not inside Shopify Admin — no session token needed, render immediately.
-    if (!host && !params.get('id_token')) {
-      setTokenReady(true);
+    if (!isAppRoute) {
+      setReady(true);
       return;
     }
 
-    // Guard: if the API key meta is missing or empty, window.shopify never
-    // initializes and idToken() hangs indefinitely — fail fast instead.
-    const apiKeyMeta = document.querySelector('meta[name="shopify-api-key"]');
-    if (!apiKeyMeta?.getAttribute('content')) {
-      console.error('[pleero:auth] shopify-api-key meta tag missing or empty');
-      setAuthError(true);
-      setTokenReady(true);
-      return;
-    }
+    fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' })
+      .then(async res => {
+        if (res.ok) {
+          setReady(true);
+          return;
+        }
 
-    // Pre-fetch the token so it lands in sessionStorage before any child
-    // page useEffect runs.  On failure, surface an error UI with a reload
-    // option instead of silently rendering pages that will also fail and
-    // show their own prolonged "Loading…" state.
-    getSessionToken()
-      .then(() => setTokenReady(true))
+        // No valid session — if the merchant arrived from Shopify Admin the URL
+        // will have a `shop` param.  Re-run OAuth (which is instant for already-
+        // installed apps) to issue a fresh session cookie.
+        const shop = new URLSearchParams(window.location.search).get('shop');
+        if (shop) {
+          window.location.href = `${API_BASE_URL}/auth/install?shop=${encodeURIComponent(shop)}`;
+          return; // navigating away — don't update state
+        }
+
+        setAuthError('not_installed');
+        setReady(true);
+      })
       .catch(() => {
-        setAuthError(true);
-        setTokenReady(true);
+        setAuthError('network');
+        setReady(true);
       });
   }, []);
 
-  if (!tokenReady) {
+  if (!ready) {
     return (
       <AppProvider i18n={enTranslations}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
           <Spinner accessibilityLabel="Loading Pleero" size="large" />
         </div>
       </AppProvider>
@@ -82,17 +75,25 @@ export default function Providers({ children }: PropsWithChildren) {
   }
 
   if (authError) {
+    const isNetworkError = authError === 'network';
     return (
       <AppProvider i18n={enTranslations}>
-        <Page title="Authentication Error">
+        <Page title={isNetworkError ? 'Connection Error' : 'App Not Installed'}>
           <Banner
             tone="critical"
-            title="Unable to connect to Shopify"
-            action={{ content: 'Reload', onAction: () => window.location.reload() }}
+            title={isNetworkError ? 'Could not reach Pleero' : 'Pleero is not installed'}
+            action={{ content: isNetworkError ? 'Reload' : 'Install Pleero', onAction: () => {
+              if (isNetworkError) {
+                window.location.reload();
+              } else {
+                window.location.href = 'https://apps.shopify.com/pleero';
+              }
+            }}}
           >
             <p>
-              Pleero must be opened from within your Shopify Admin. If you are
-              already in Shopify Admin, try reloading the page.
+              {isNetworkError
+                ? 'Check your internet connection and try reloading the page.'
+                : 'Open this app from your Shopify Admin after installing it from the App Store.'}
             </p>
           </Banner>
         </Page>

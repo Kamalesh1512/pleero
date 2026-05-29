@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.services.billing import create_subscription, update_merchant_subscription
-from app.utils.app_bridge_auth import get_current_shop
+from app.utils.session_auth import get_current_shop
 from app.utils.shopify_auth import verify_hmac
 
 logger = get_logger(__name__)
@@ -159,6 +159,5 @@ async def billing_callback(
         charge_id=charge_id,
     )
 
-    # Redirect to frontend dashboard
-    dashboard_url = f"{settings.FRONTEND_URL}/?shop={shop}&activated=true"
-    return RedirectResponse(url=dashboard_url)
+    # Redirect to the standalone dashboard — session cookie identifies the shop
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/dashboard")

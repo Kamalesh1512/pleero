@@ -1,11 +1,9 @@
 /**
  * API client for Pleero frontend.
- * fetchWithAuth always gets a fresh token from window.shopify.idToken() — never
- * pass a pre-fetched token. Shopify session tokens expire in 60 s; calling
- * idToken() before every request is the correct pattern per Shopify docs.
+ * Auth is cookie-based (pleero_session HttpOnly cookie set by the backend
+ * during OAuth).  Every request uses credentials:'include' so the browser
+ * sends the cookie automatically — no manual token handling needed.
  */
-
-import { getSessionToken as getAppBridgeSessionToken, invalidateStoredToken } from './shopify-app-bridge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pleero.app';
 
@@ -23,16 +21,13 @@ export class ApiError extends Error {
 
 // ─── Internal fetch helper ────────────────────────────────────────────────────
 
-// Hard abort after this many ms — prevents infinite "Loading..." on slow/dead backends.
 const FETCH_TIMEOUT_MS = 30_000;
 
 async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
   const fullUrl = `${API_BASE_URL}${path}`;
 
-  const token = await getAppBridgeSessionToken();
   const headers = {
-    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   };
@@ -44,7 +39,12 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
 
   let res: Response;
   try {
-    res = await fetch(fullUrl, { ...init, headers, signal: controller.signal });
+    res = await fetch(fullUrl, {
+      ...init,
+      headers,
+      credentials: 'include', // send the pleero_session cookie
+      signal: controller.signal,
+    });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       console.warn('[pleero:api] ← TIMEOUT', method, path);
@@ -57,33 +57,7 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
   }
 
   console.debug('[pleero:api] ←', res.status, method, path);
-
-  if (res.status !== 401) return res;
-
-  // Token was rejected — invalidate cache, get a genuinely fresh one, retry once.
-  console.warn('[pleero:api] 401 on', method, path, '— refreshing token and retrying');
-  invalidateStoredToken();
-  const freshToken = await getAppBridgeSessionToken();
-
-  const retryController = new AbortController();
-  const retryTid = setTimeout(() => retryController.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const retryRes = await fetch(fullUrl, {
-      ...init,
-      headers: { ...headers, Authorization: `Bearer ${freshToken}` },
-      signal: retryController.signal,
-    });
-    console.debug('[pleero:api] ← retry', retryRes.status, method, path);
-    return retryRes;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      console.warn('[pleero:api] ← TIMEOUT on retry', method, path);
-      throw new Error('Request timed out. Please check your connection and try again.');
-    }
-    throw err;
-  } finally {
-    clearTimeout(retryTid);
-  }
+  return res;
 }
 
 function throwApiError(res: Response, context: string): never {
@@ -147,6 +121,20 @@ export interface PublicOffer {
 export interface OfferActionResponse {
   status: string;
   message: string;
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export async function checkSession(): Promise<{ shop: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      credentials: 'include',
+    });
+    if (res.ok) return res.json();
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Authenticated endpoints ──────────────────────────────────────────────────
