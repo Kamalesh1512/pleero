@@ -272,6 +272,7 @@ async def callback(
 
 # ─── Authenticated session endpoints ─────────────────────────────────────────
 
+
 @api_router.get("/me")
 async def get_me(shop: str = Depends(get_current_shop)) -> dict[str, str]:
     """Return the shop domain for the current session. Used by the frontend to

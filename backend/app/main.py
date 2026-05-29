@@ -60,7 +60,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 _CORS_ORIGINS = [
     "https://pleero.app",
     "https://app.pleero.app",  # if ever split to a subdomain
-    "http://localhost:3000",    # local development
+    "http://localhost:3000",  # local development
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -71,8 +71,8 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(auth.router)          # /auth/install, /auth/callback
-app.include_router(auth_api_router)      # /api/auth/me, /api/auth/logout
+app.include_router(auth.router)  # /auth/install, /auth/callback
+app.include_router(auth_api_router)  # /api/auth/me, /api/auth/logout
 app.include_router(webhooks.router)
 app.include_router(offers.router)
 app.include_router(dashboard.router)
