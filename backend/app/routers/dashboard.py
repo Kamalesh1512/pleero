@@ -16,7 +16,7 @@ from app.core.logging import get_logger
 from app.models.merchant import Merchant
 from app.models.offer import Offer, OfferStatus
 from app.schemas.merchant import MerchantResponse, MerchantUpdate
-from app.utils.app_bridge_auth import get_current_shop
+from app.utils.session_auth import get_current_shop
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["dashboard"])

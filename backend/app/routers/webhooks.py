@@ -20,6 +20,7 @@ from app.schemas.webhook import (
     RefundWebhookPayload,
     ShopRedactPayload,
 )
+from app.utils.session_auth import revoke_session_for_shop
 from app.utils.shopify_webhooks import (
     calculate_bonus,
     parse_refund_webhook,
@@ -289,6 +290,10 @@ async def handle_app_uninstalled(
         merchant.subscription_status = SubscriptionStatus.CANCELLED
 
         await db.commit()
+
+        # Invalidate the merchant's session so the frontend shows the
+        # "not authenticated" state immediately after uninstall.
+        await revoke_session_for_shop(shop_domain)
 
         logger.info(
             "app_uninstalled",

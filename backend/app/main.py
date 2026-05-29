@@ -15,6 +15,7 @@ from slowapi.util import get_remote_address
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.routers import auth, billing, dashboard, offers, webhooks
+from app.routers.auth import api_router as auth_api_router
 
 # Configure logging on import
 configure_logging()
@@ -54,21 +55,24 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS
-# Shopify embedded apps can be loaded from admin.shopify.com, *.myshopify.com,
-# or the app's own Vercel/custom domain depending on context. Since all protected
-# routes are secured by JWT session token validation (get_current_shop), CORS
-# acts as a secondary browser-side guard only — we allow all HTTPS origins.
-# Bearer token auth does not use cookies, so allow_credentials stays False.
+# Cookie-based auth requires allow_credentials=True, which mandates explicit
+# origins (no wildcard).  We list every origin that the frontend can run on.
+_CORS_ORIGINS = [
+    "https://pleero.app",
+    "https://app.pleero.app",  # if ever split to a subdomain
+    "http://localhost:3000",    # local development
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # Register routers
-app.include_router(auth.router)
+app.include_router(auth.router)          # /auth/install, /auth/callback
+app.include_router(auth_api_router)      # /api/auth/me, /api/auth/logout
 app.include_router(webhooks.router)
 app.include_router(offers.router)
 app.include_router(dashboard.router)

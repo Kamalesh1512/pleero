@@ -37,10 +37,10 @@ export default function BillingPage() {
     setError(null);
     try {
       const { confirmation_url } = await activateBilling();
-      // Navigate the top-level Shopify Admin frame to the charge confirmation page.
-      // window.open with '_top' is the standard pattern for embedded app billing redirects.
-      window.open(confirmation_url, '_top');
-      // Don't reset activating — the parent frame will navigate away.
+      // Standalone app: navigate directly to Shopify's billing confirmation page.
+      // After approval Shopify redirects to /api/billing/callback → /dashboard.
+      window.location.href = confirmation_url;
+      // Don't reset activating — the page navigates away.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to activate billing');
       setActivating(false);

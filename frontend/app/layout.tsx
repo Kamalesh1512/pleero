@@ -61,17 +61,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
-      <head>
-        {/* Shopify App Bridge: meta tag must come before the script.
-            Plain <script> (no async/defer) required — App Bridge aborts if async is present. */}
-        <meta name="shopify-api-key" content={process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ?? ''} />
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
-        {/* Strip id_token from the URL after App Bridge has consumed it.
-            Leaving it in the URL allows the token to be reused across navigations,
-            which Shopify treats as a replay attack and rejects with 401. */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var p=new URLSearchParams(location.search);if(p.has('id_token')){p.delete('id_token');var s=p.toString();history.replaceState(null,'',location.pathname+(s?'?'+s:'')+location.hash);}})();` }} />
-      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

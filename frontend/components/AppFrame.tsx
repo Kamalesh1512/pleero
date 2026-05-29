@@ -20,16 +20,7 @@ export default function AppFrame({ children }: PropsWithChildren) {
 
   const handleNavigation = useCallback(
     (url: string) => {
-      const searchParams = new URLSearchParams(
-        typeof window !== 'undefined' ? window.location.search : '',
-      );
-      const shop = searchParams.get('shop');
-      const host = searchParams.get('host');
-      const params = new URLSearchParams();
-      if (shop) params.append('shop', shop);
-      if (host) params.append('host', host);
-      const fullUrl = params.toString() ? `${url}?${params.toString()}` : url;
-      router.push(fullUrl);
+      router.push(url);
       setMobileNavActive(false);
     },
     [router],
