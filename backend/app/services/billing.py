@@ -78,7 +78,7 @@ async def create_subscription(
 
         # GraphQL mutation for recurring charge
         mutation = """
-        mutation appSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: String!, $trialDays: Int, $test: Boolean) {
+        mutation appSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $trialDays: Int, $test: Boolean) {
             appSubscriptionCreate(
                 name: $name
                 lineItems: $lineItems
