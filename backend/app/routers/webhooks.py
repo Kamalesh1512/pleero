@@ -114,7 +114,6 @@ async def _fetch_order_into_webhook_data(
                 order_id=order_id,
                 customer_email=webhook_data.customer_email,
             )
-
     except Exception as exc:
         logger.warning(
             "order_fetch_failed",
