@@ -182,7 +182,9 @@ async def handle_refund_created(
         # Shopify refund webhook does not include the full order/customer object.
         # Fetch the order from the Admin API to get customer email and name.
         if not webhook_data.customer_email:
-            await _fetch_order_into_webhook_data(webhook_data, merchant, payload.order_id, db)
+            await _fetch_order_into_webhook_data(
+                webhook_data, merchant, payload.order_id, db
+            )
 
         # Validate webhook data
         if not webhook_data.is_valid():
