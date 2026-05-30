@@ -48,6 +48,7 @@ services:
       - APP_ENV=production
       - API_BASE_URL=https://api.pleero.app
       - FRONTEND_URL=https://pleero.app
+      - BILLING_TEST_MODE=${BILLING_TEST_MODE:-false}
     depends_on:
       postgres:
         condition: service_healthy

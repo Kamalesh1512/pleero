@@ -56,6 +56,26 @@ async def create_subscription(
     )
 
     try:
+        # Partner Development Stores require test=true or Shopify returns a user error.
+        # Auto-detect by checking plan_name so no manual flag is needed for reviewers.
+        use_test_mode = settings.BILLING_TEST_MODE
+        try:
+            shop_resp = await client.get(
+                f"https://{merchant.shop_domain}/admin/api"
+                f"/{settings.SHOPIFY_API_VERSION}/shop.json"
+            )
+            if shop_resp.status_code == 200:
+                plan_name = shop_resp.json().get("shop", {}).get("plan_name", "")
+                if plan_name == "partner_test":
+                    use_test_mode = True
+                    logger.info(
+                        "billing_test_mode_auto_enabled",
+                        merchant_id=str(merchant_id),
+                        plan_name=plan_name,
+                    )
+        except Exception:
+            pass  # network hiccup — fall back to settings.BILLING_TEST_MODE
+
         # GraphQL mutation for recurring charge
         mutation = """
         mutation appSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: String!, $trialDays: Int, $test: Boolean) {
@@ -94,7 +114,7 @@ async def create_subscription(
             ],
             "returnUrl": f"{settings.API_BASE_URL}/api/billing/callback",
             "trialDays": 14,
-            "test": settings.BILLING_TEST_MODE,
+            "test": use_test_mode,
         }
 
         url = f"https://{merchant.shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
@@ -126,7 +146,7 @@ async def create_subscription(
                 merchant_id=str(merchant_id),
                 errors=user_errors,
                 messages=error_messages,
-                billing_test_mode=settings.BILLING_TEST_MODE,
+                billing_test_mode=use_test_mode,
             )
             return None
 
