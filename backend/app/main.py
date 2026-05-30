@@ -68,6 +68,7 @@ async def validation_exception_handler(
     )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
+
 # Configure CORS
 # Cookie-based auth requires allow_credentials=True, which mandates explicit
 # origins (no wildcard).  We list every origin that the frontend can run on.
