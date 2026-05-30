@@ -3,6 +3,7 @@ Shopify webhook endpoints.
 Receives and processes webhook events from Shopify.
 """
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,9 @@ from app.schemas.webhook import (
     ShopRedactPayload,
 )
 from app.utils.session_auth import revoke_session_for_shop
+from app.utils.shopify_auth import get_valid_access_token
 from app.utils.shopify_webhooks import (
+    RefundWebhookData,
     calculate_bonus,
     parse_refund_webhook,
     should_skip_offer,
@@ -66,6 +69,57 @@ async def verify_webhook_signature(
         )
 
     return body
+
+
+async def _fetch_order_into_webhook_data(
+    webhook_data: RefundWebhookData,
+    merchant: Merchant,
+    order_id: int,
+    db: AsyncSession,
+) -> None:
+    """Fetch order from Shopify Admin API and populate missing customer fields."""
+    try:
+        access_token = await get_valid_access_token(merchant, db)
+
+        async with httpx.AsyncClient(
+            headers={"X-Shopify-Access-Token": access_token},
+            timeout=8.0,
+        ) as client:
+            resp = await client.get(
+                f"https://{merchant.shop_domain}/admin/api"
+                f"/{settings.SHOPIFY_API_VERSION}/orders/{order_id}.json",
+                params={"fields": "id,name,customer,currency"},
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "order_fetch_non_200",
+                    order_id=order_id,
+                    status=resp.status_code,
+                )
+                return
+
+            order = resp.json().get("order") or {}
+            customer = order.get("customer") or {}
+
+            webhook_data.customer_email = customer.get("email", "")
+            webhook_data.customer_first_name = customer.get("first_name", "")
+            webhook_data.order_name = order.get("name", "")
+            webhook_data.currency_code = order.get("currency", "USD")
+            raw_id = customer.get("id")
+            if raw_id:
+                webhook_data.customer_shopify_gid = f"gid://shopify/Customer/{raw_id}"
+
+            logger.info(
+                "order_fetched_for_webhook",
+                order_id=order_id,
+                customer_email=webhook_data.customer_email,
+            )
+    except Exception as exc:
+        logger.warning(
+            "order_fetch_failed",
+            order_id=order_id,
+            error=str(exc),
+        )
 
 
 @router.post("/refunds/create")
@@ -124,6 +178,13 @@ async def handle_refund_created(
 
         # Parse webhook data
         webhook_data = parse_refund_webhook(payload.model_dump())
+
+        # Shopify refund webhook does not include the full order/customer object.
+        # Fetch the order from the Admin API to get customer email and name.
+        if not webhook_data.customer_email:
+            await _fetch_order_into_webhook_data(
+                webhook_data, merchant, payload.order_id, db
+            )
 
         # Validate webhook data
         if not webhook_data.is_valid():

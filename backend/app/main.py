@@ -6,8 +6,10 @@ Entry point for the Pleero backend.
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -53,6 +55,19 @@ app = FastAPI(
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    logger.error(
+        "request_validation_error",
+        path=str(request.url.path),
+        errors=exc.errors(),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 
 # Configure CORS
 # Cookie-based auth requires allow_credentials=True, which mandates explicit

@@ -15,8 +15,8 @@ class RefundLineItem(BaseModel):
     id: int
     line_item_id: int
     quantity: int
-    subtotal: str
-    total_tax: str
+    subtotal: float | str  # Shopify sends as float; str accepted for older API versions
+    total_tax: float | str
     return_reason: str | None = None
 
 
@@ -41,7 +41,7 @@ class Order(BaseModel):
     """Order data from Shopify webhook."""
 
     id: int
-    name: str
+    name: str | None = None
     customer: Customer | None = None
     currency: str = "USD"
 

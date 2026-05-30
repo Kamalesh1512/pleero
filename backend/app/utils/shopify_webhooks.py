@@ -63,15 +63,15 @@ class RefundWebhookData:
             int(float(item.get("subtotal", 0)) * 100) for item in refund_line_items
         )
 
-        # Get order data
-        order = payload.get("order", {})
-        self.order_name = order.get("name", "")
+        # Get order data (may be None — refund webhook doesn't always include it)
+        order = payload.get("order") or {}
+        self.order_name = order.get("name", "") if isinstance(order, dict) else ""
 
         # Get customer data
-        customer = order.get("customer", {})
+        customer = (order.get("customer") or {}) if isinstance(order, dict) else {}
         self.customer_email = customer.get("email", "")
         self.customer_first_name = customer.get("first_name", "")
-        self.customer_country = customer.get("default_address", {}).get(
+        self.customer_country = (customer.get("default_address") or {}).get(
             "country_code", ""
         )
         # Build customer GID from numeric ID — avoids protected customers query at credit time
