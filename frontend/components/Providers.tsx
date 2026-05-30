@@ -9,6 +9,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pleero.app'
 
 const APP_ROUTES = ['/dashboard', '/settings', '/offers', '/billing', '/analytics'];
 
+// /offers/{token} is the public customer offer page — no merchant auth needed.
+// APP_ROUTES includes '/offers' for the merchant offers list, but that must not
+// catch the customer sub-path.
+const PUBLIC_PREFIXES = ['/offers/'];
+
 export default function Providers({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -17,7 +22,8 @@ export default function Providers({ children }: PropsWithChildren) {
     if (typeof window === 'undefined') return;
 
     const pathname = window.location.pathname;
-    const isAppRoute = APP_ROUTES.some(r => pathname.startsWith(r));
+    const isPublic = PUBLIC_PREFIXES.some(r => pathname.startsWith(r));
+    const isAppRoute = !isPublic && APP_ROUTES.some(r => pathname.startsWith(r));
 
     if (!isAppRoute) {
       setReady(true);

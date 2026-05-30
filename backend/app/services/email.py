@@ -249,10 +249,10 @@ async def send_offer_email(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "from": "Pleero <returns@pleero.app>",
+                    "from": f"{merchant_name} <returns@pleero.app>",
                     "to": [offer.customer_email],
                     "reply_to": merchant.merchant_email,
-                    "subject": f"{merchant_name} approved your return",
+                    "subject": f"Your return from {merchant_name} is ready",
                     "html": html_content,
                 },
                 timeout=10.0,
