@@ -21,6 +21,10 @@ from app.core.database import get_db
 from app.core.encryption import encrypt_token
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
+from app.services.billing import (
+    create_subscription,
+    sync_merchant_subscription_from_shopify,
+)
 from app.utils.session_auth import (
     COOKIE_NAME,
     SESSION_TTL,
@@ -231,6 +235,7 @@ async def callback(
         logger.info("merchant_created", shop=shop, merchant_id=str(merchant.id))
 
     await db.commit()
+    await db.refresh(merchant)
 
     # NOTE: REFUNDS_CREATE webhook requires Shopify approval for programmatic registration
     # due to protected customer data. Instead, we rely on shopify.app.toml declarative
@@ -254,10 +259,22 @@ async def callback(
     session_id = await create_session(shop)
     is_prod = settings.APP_ENV == "production"
 
-    response = RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/dashboard",
-        status_code=302,
+    await sync_merchant_subscription_from_shopify(db, merchant)
+
+    redirect_url = f"{settings.FRONTEND_URL}/dashboard"
+    has_approved_shopify_subscription = (
+        merchant.subscription_status
+        in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]
+        and merchant.subscription_id is not None
     )
+    if not has_approved_shopify_subscription:
+        confirmation_url = await create_subscription(db, merchant.id)
+        if confirmation_url:
+            redirect_url = confirmation_url
+        else:
+            redirect_url = f"{settings.FRONTEND_URL}/billing"
+
+    response = RedirectResponse(url=redirect_url, status_code=302)
     response.set_cookie(
         key=COOKIE_NAME,
         value=session_id,

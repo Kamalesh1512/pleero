@@ -13,7 +13,10 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.services.billing import create_subscription, update_merchant_subscription
+from app.services.billing import (
+    create_subscription,
+    sync_merchant_subscription_from_shopify,
+)
 from app.utils.session_auth import get_current_shop
 from app.utils.shopify_auth import verify_hmac
 
@@ -80,7 +83,7 @@ async def activate_subscription(
 @router.get("/callback")
 async def billing_callback(
     request: Request,
-    charge_id: str = Query(..., description="Shopify charge ID"),
+    charge_id: str | None = Query(None, description="Shopify charge ID"),
     shop: str = Query(..., description="Shop domain"),
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
@@ -91,12 +94,12 @@ async def billing_callback(
 
     Steps:
     1. Verify HMAC signature (security: prevent forged callbacks)
-    2. Verify charge ID with Shopify API
-    3. Update merchant subscription status to ACTIVE
+    2. Verify approval by reading active subscriptions from Shopify
+    3. Update merchant subscription status from Shopify's source of truth
     4. Redirect to frontend dashboard
 
     Query params:
-        charge_id: Shopify charge ID
+        charge_id: Shopify charge ID, when included by Shopify
         shop: Shop domain
         hmac: HMAC signature from Shopify
 
@@ -109,9 +112,12 @@ async def billing_callback(
         charge_id=charge_id,
     )
 
-    # Step 1: Verify HMAC signature (Hard Rule #1)
+    # Step 1: Verify HMAC signature when Shopify includes one.
+    # Billing return URLs are validated below against Shopify's active
+    # subscriptions, which is the source of truth for charge approval.
     query_params = dict(request.query_params)
-    if not verify_hmac(query_params, settings.SHOPIFY_API_SECRET):
+    callback_hmac = query_params.get("hmac")
+    if callback_hmac and not verify_hmac(query_params, settings.SHOPIFY_API_SECRET):
         logger.error(
             "billing_callback_hmac_failed",
             shop=shop,
@@ -133,24 +139,16 @@ async def billing_callback(
             detail="Merchant not found",
         )
 
-    # Update subscription status to ACTIVE
-    success = await update_merchant_subscription(
-        db,
-        merchant.id,
-        SubscriptionStatus.ACTIVE,
-        charge_id,
-    )
-
-    if not success:
+    status = await sync_merchant_subscription_from_shopify(db, merchant)
+    if status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]:
         logger.error(
-            "subscription_update_failed",
+            "subscription_not_approved",
             shop=shop,
             merchant_id=str(merchant.id),
+            charge_id=charge_id,
+            status=status.value,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to update subscription",
-        )
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/billing")
 
     logger.info(
         "subscription_activated",
