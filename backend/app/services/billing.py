@@ -5,6 +5,7 @@ Hard rule #4: Use httpx (async), never requests (blocking).
 Hard rule #5: Never hardcode API version - use settings.SHOPIFY_API_VERSION.
 """
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -17,6 +18,124 @@ from app.models.merchant import Merchant, SubscriptionStatus
 from app.utils.shopify_auth import get_valid_access_token
 
 logger = get_logger(__name__)
+
+PLAN_NAME = "Pleero - Store Credit Offers"
+PLAN_PRICE = 99.0
+PLAN_TRIAL_DAYS = 14
+
+
+def _subscription_status_from_shopify(status: str) -> SubscriptionStatus:
+    """Map Shopify AppSubscriptionStatus values to the local enum."""
+    normalized_status = status.upper()
+    if normalized_status == "ACTIVE":
+        return SubscriptionStatus.ACTIVE
+    if normalized_status == "PENDING":
+        return SubscriptionStatus.TRIAL
+    if normalized_status == "CANCELLED":
+        return SubscriptionStatus.CANCELLED
+    return SubscriptionStatus.EXPIRED
+
+
+async def fetch_current_app_subscription(
+    merchant: Merchant,
+    db: AsyncSession,
+) -> tuple[SubscriptionStatus, str | None]:
+    """
+    Fetch the merchant's current app subscription from Shopify.
+
+    Shopify's Billing API uses currentAppInstallation.activeSubscriptions as the
+    source of truth after a merchant approves a charge.
+    """
+    access_token = await get_valid_access_token(merchant, db)
+
+    async with httpx.AsyncClient(
+        headers={
+            "X-Shopify-Access-Token": access_token,
+            "Content-Type": "application/json",
+        },
+        timeout=30.0,
+    ) as client:
+        query = """
+        query {
+            currentAppInstallation {
+                activeSubscriptions {
+                    id
+                    status
+                    trialDays
+                    currentPeriodEnd
+                }
+            }
+        }
+        """
+
+        response = await client.post(
+            (
+                f"https://{merchant.shop_domain}/admin/api/"
+                f"{settings.SHOPIFY_API_VERSION}/graphql.json"
+            ),
+            json={"query": query},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    if "errors" in data:
+        raise ValueError(f"Shopify GraphQL errors: {data['errors']}")
+
+    subscriptions = (
+        data.get("data", {})
+        .get("currentAppInstallation", {})
+        .get("activeSubscriptions", [])
+    )
+
+    if not subscriptions:
+        return SubscriptionStatus.EXPIRED, None
+
+    subscription = subscriptions[0]
+    return (
+        _subscription_status_from_shopify(subscription.get("status", "")),
+        subscription.get("id"),
+    )
+
+
+async def sync_merchant_subscription_from_shopify(
+    db: AsyncSession,
+    merchant: Merchant,
+) -> SubscriptionStatus:
+    """
+    Persist Shopify's current subscription state locally.
+
+    If Shopify cannot be reached, keep the existing local status rather than
+    blocking the app on a transient API problem.
+    """
+    try:
+        status, subscription_id = await fetch_current_app_subscription(merchant, db)
+    except Exception as e:
+        logger.error(
+            "subscription_sync_failed",
+            shop=merchant.shop_domain,
+            merchant_id=str(merchant.id),
+            error=str(e),
+            exc_info=True,
+        )
+        return merchant.subscription_status
+
+    merchant.subscription_status = status
+    merchant.subscription_id = subscription_id
+    if status == SubscriptionStatus.TRIAL and merchant.trial_ends_at is None:
+        merchant.trial_ends_at = datetime.now(UTC) + timedelta(days=PLAN_TRIAL_DAYS)
+
+    await db.commit()
+    await db.refresh(merchant)
+
+    logger.info(
+        "subscription_synced_from_shopify",
+        shop=merchant.shop_domain,
+        merchant_id=str(merchant.id),
+        status=status.value,
+        subscription_id=subscription_id,
+    )
+
+    return status
 
 
 async def create_subscription(
@@ -101,23 +220,29 @@ async def create_subscription(
         """
 
         variables = {
-            "name": "Pleero - Store Credit Offers",
+            "name": PLAN_NAME,
             "lineItems": [
                 {
                     "plan": {
                         "appRecurringPricingDetails": {
-                            "price": {"amount": 99.0, "currencyCode": "USD"},
+                            "price": {"amount": PLAN_PRICE, "currencyCode": "USD"},
                             "interval": "EVERY_30_DAYS",
                         }
                     }
                 }
             ],
-            "returnUrl": f"{settings.API_BASE_URL}/api/billing/callback",
-            "trialDays": 14,
+            "returnUrl": (
+                f"{settings.API_BASE_URL}/api/billing/callback"
+                f"?shop={merchant.shop_domain}"
+            ),
+            "trialDays": PLAN_TRIAL_DAYS,
             "test": use_test_mode,
         }
 
-        url = f"https://{merchant.shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
+        url = (
+            f"https://{merchant.shop_domain}/admin/api/"
+            f"{settings.SHOPIFY_API_VERSION}/graphql.json"
+        )
 
         response = await client.post(
             url,
@@ -222,72 +347,9 @@ async def get_subscription_status(
         logger.error("merchant_not_found", merchant_id=str(merchant_id))
         return SubscriptionStatus.CANCELLED
 
-    # Get a valid (auto-refreshed if near expiry) access token
-    access_token = await get_valid_access_token(merchant, db)
-
-    # Create authenticated client
-    client = httpx.AsyncClient(
-        headers={
-            "X-Shopify-Access-Token": access_token,
-            "Content-Type": "application/json",
-        },
-        timeout=30.0,
-    )
-
     try:
-        # GraphQL query for current subscription
-        query = """
-        query {
-            currentAppInstallation {
-                activeSubscriptions {
-                    id
-                    status
-                    trialDays
-                    currentPeriodEnd
-                }
-            }
-        }
-        """
-
-        url = f"https://{merchant.shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
-
-        response = await client.post(
-            url,
-            json={"query": query},
-        )
-
-        response.raise_for_status()
-        data = response.json()
-
-        # Check for errors
-        if "errors" in data:
-            logger.error(
-                "get_subscription_status_graphql_error",
-                merchant_id=str(merchant_id),
-                errors=data["errors"],
-            )
-            return merchant.subscription_status
-
-        installation = data.get("data", {}).get("currentAppInstallation", {})
-        subscriptions = installation.get("activeSubscriptions", [])
-
-        if not subscriptions:
-            # No active subscription
-            return SubscriptionStatus.EXPIRED
-
-        subscription = subscriptions[0]
-        status = subscription.get("status", "").upper()
-
-        # Map Shopify status to our enum
-        if status == "ACTIVE":
-            return SubscriptionStatus.ACTIVE
-        elif status == "PENDING":
-            # During trial
-            return SubscriptionStatus.TRIAL
-        elif status == "CANCELLED":
-            return SubscriptionStatus.CANCELLED
-        else:
-            return SubscriptionStatus.EXPIRED
+        status, _subscription_id = await fetch_current_app_subscription(merchant, db)
+        return status
 
     except httpx.HTTPError as e:
         logger.error(
@@ -306,9 +368,6 @@ async def get_subscription_status(
             exc_info=True,
         )
         return merchant.subscription_status
-
-    finally:
-        await client.aclose()
 
 
 async def update_merchant_subscription(
