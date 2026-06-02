@@ -1,15 +1,18 @@
 'use client';
 
-import { Page, Card, Layout, Text, BlockStack, Banner, Button, Spinner } from '@shopify/polaris';
+import { Page, Card, Layout, Text, BlockStack, Banner, Button, Spinner, Modal } from '@shopify/polaris';
 import { useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
-import { getMerchantSettings, activateBilling, ApiError, type Merchant } from '@/lib/api';
+import { getMerchantSettings, activateBilling, cancelBilling, ApiError, type Merchant } from '@/lib/api';
 
 export default function BillingPage() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadMerchant = useCallback(async () => {
     try {
@@ -35,6 +38,7 @@ export default function BillingPage() {
   const handleActivateBilling = async () => {
     setActivating(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       const { confirmation_url } = await activateBilling();
       // Standalone app: navigate directly to Shopify's billing confirmation page.
@@ -44,6 +48,22 @@ export default function BillingPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to activate billing');
       setActivating(false);
+    }
+  };
+
+  const handleCancelBilling = async () => {
+    setCanceling(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await cancelBilling();
+      setCancelModalOpen(false);
+      setSuccessMessage('Your subscription has been cancelled. You can reactivate the plan anytime from this page.');
+      await loadMerchant();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel billing');
+    } finally {
+      setCanceling(false);
     }
   };
 
@@ -71,7 +91,10 @@ export default function BillingPage() {
     );
   }
 
-  const isActive = merchant.subscription_status === 'ACTIVE';
+  const hasSelectedPlan = Boolean(
+    merchant.subscription_id &&
+    ['ACTIVE', 'TRIAL'].includes(merchant.subscription_status),
+  );
   const isTrial = merchant.trial_ends_at && new Date(merchant.trial_ends_at) > new Date();
   const trialEnded = merchant.trial_ends_at && new Date(merchant.trial_ends_at) < new Date();
 
@@ -81,7 +104,7 @@ export default function BillingPage() {
         <Layout>
           <Layout.Section>
             <BlockStack gap="400">
-              {isTrial && !isActive && (
+              {isTrial && !hasSelectedPlan && (
                 <Banner tone="info">
                   <Text as="p">
                     Your 14-day trial ends on {merchant.trial_ends_at ? new Date(merchant.trial_ends_at).toLocaleDateString() : ''}.
@@ -90,7 +113,7 @@ export default function BillingPage() {
                 </Banner>
               )}
 
-              {trialEnded && !isActive && (
+              {trialEnded && !hasSelectedPlan && (
                 <Banner
                   tone="warning"
                   action={{
@@ -105,9 +128,21 @@ export default function BillingPage() {
                 </Banner>
               )}
 
-              {isActive && (
+              {hasSelectedPlan && (
                 <Banner tone="success">
-                  <Text as="p">Your subscription is active.</Text>
+                  <Text as="p">Your Pleero Growth plan is selected and billed through Shopify.</Text>
+                </Banner>
+              )}
+
+              {successMessage && (
+                <Banner tone="success" onDismiss={() => setSuccessMessage(null)}>
+                  <Text as="p">{successMessage}</Text>
+                </Banner>
+              )}
+
+              {error && (
+                <Banner tone="critical" onDismiss={() => setError(null)}>
+                  <Text as="p">{error}</Text>
                 </Banner>
               )}
 
@@ -126,7 +161,7 @@ export default function BillingPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Text as="p">Status:</Text>
                       <Text as="p" fontWeight="semibold">
-                        {isActive ? 'Active' : isTrial ? 'Trial' : 'Inactive'}
+                        {hasSelectedPlan ? 'Selected' : isTrial ? 'Trial' : 'Inactive'}
                       </Text>
                     </div>
                     {merchant.trial_ends_at && (
@@ -139,9 +174,15 @@ export default function BillingPage() {
                     )}
                   </BlockStack>
 
-                  {!isActive && !trialEnded && (
+                  {!hasSelectedPlan && !trialEnded && (
                     <Button onClick={handleActivateBilling} loading={activating} variant="primary">
                       Activate $99/month plan
+                    </Button>
+                  )}
+
+                  {hasSelectedPlan && (
+                    <Button onClick={() => setCancelModalOpen(true)} loading={canceling} tone="critical">
+                      Cancel subscription
                     </Button>
                   )}
                 </BlockStack>
@@ -163,6 +204,34 @@ export default function BillingPage() {
             </BlockStack>
           </Layout.Section>
         </Layout>
+        <Modal
+          open={cancelModalOpen}
+          onClose={() => setCancelModalOpen(false)}
+          title="Cancel subscription"
+          primaryAction={{
+            content: 'Cancel subscription',
+            destructive: true,
+            loading: canceling,
+            onAction: handleCancelBilling,
+          }}
+          secondaryActions={[
+            {
+              content: 'Keep subscription',
+              onAction: () => setCancelModalOpen(false),
+            },
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <Text as="p">
+                This will cancel your current Pleero subscription through Shopify Billing.
+              </Text>
+              <Text as="p">
+                You can reactivate the $99/month plan later from this Billing page without reinstalling the app.
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
       </Page>
     </AppFrame>
   );

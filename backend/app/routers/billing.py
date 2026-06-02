@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.services.billing import (
+    cancel_subscription,
     create_subscription,
     sync_merchant_subscription_from_shopify,
 )
@@ -28,6 +29,12 @@ class ActivateResponse(BaseModel):
     """Response for activation request."""
 
     confirmation_url: str
+
+
+class CancelResponse(BaseModel):
+    """Response for cancellation request."""
+
+    status: SubscriptionStatus
 
 
 @router.post("/activate")
@@ -78,6 +85,42 @@ async def activate_subscription(
     )
 
     return ActivateResponse(confirmation_url=confirmation_url)
+
+
+@router.post("/cancel")
+async def cancel_current_subscription(
+    shop: str = Depends(get_current_shop),
+    db: AsyncSession = Depends(get_db),
+) -> CancelResponse:
+    """
+    Cancel the merchant's current Shopify app subscription.
+
+    This gives merchants a self-serve way to change away from the paid plan
+    without contacting support or reinstalling the app.
+    """
+    result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
+    merchant = result.scalar_one_or_none()
+
+    if not merchant:
+        logger.error("merchant_not_found", shop=shop)
+        raise HTTPException(
+            status_code=404,
+            detail="Merchant not found",
+        )
+
+    status = await cancel_subscription(db, merchant.id)
+    if status is None:
+        logger.error(
+            "subscription_cancellation_failed",
+            shop=shop,
+            merchant_id=str(merchant.id),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to cancel subscription",
+        )
+
+    return CancelResponse(status=status)
 
 
 @router.get("/callback")
