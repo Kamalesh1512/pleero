@@ -323,6 +323,110 @@ async def create_subscription(
         await client.aclose()
 
 
+async def cancel_subscription(
+    db: AsyncSession,
+    merchant_id: UUID,
+) -> SubscriptionStatus | None:
+    """
+    Cancel the merchant's current Shopify app subscription.
+
+    Returns the updated local subscription status, or None if cancellation
+    failed before Shopify accepted the mutation.
+    """
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
+    merchant = result.scalar_one_or_none()
+
+    if not merchant:
+        logger.error("merchant_not_found", merchant_id=str(merchant_id))
+        return None
+
+    await sync_merchant_subscription_from_shopify(db, merchant)
+    if not merchant.subscription_id:
+        logger.info(
+            "cancel_subscription_no_active_subscription",
+            merchant_id=str(merchant_id),
+            shop=merchant.shop_domain,
+        )
+        merchant.subscription_status = SubscriptionStatus.CANCELLED
+        await db.commit()
+        return merchant.subscription_status
+
+    access_token = await get_valid_access_token(merchant, db)
+
+    async with httpx.AsyncClient(
+        headers={
+            "X-Shopify-Access-Token": access_token,
+            "Content-Type": "application/json",
+        },
+        timeout=30.0,
+    ) as client:
+        mutation = """
+        mutation AppSubscriptionCancel($id: ID!, $prorate: Boolean) {
+            appSubscriptionCancel(id: $id, prorate: $prorate) {
+                userErrors {
+                    field
+                    message
+                }
+                appSubscription {
+                    id
+                    status
+                }
+            }
+        }
+        """
+
+        response = await client.post(
+            (
+                f"https://{merchant.shop_domain}/admin/api/"
+                f"{settings.SHOPIFY_API_VERSION}/graphql.json"
+            ),
+            json={
+                "query": mutation,
+                "variables": {
+                    "id": merchant.subscription_id,
+                    "prorate": True,
+                },
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    if "errors" in data:
+        logger.error(
+            "cancel_subscription_graphql_error",
+            merchant_id=str(merchant_id),
+            errors=data["errors"],
+        )
+        return None
+
+    result_data = data.get("data", {}).get("appSubscriptionCancel", {})
+    user_errors = result_data.get("userErrors", [])
+    if user_errors:
+        logger.error(
+            "cancel_subscription_user_errors",
+            merchant_id=str(merchant_id),
+            errors=user_errors,
+        )
+        return None
+
+    subscription = result_data.get("appSubscription") or {}
+    status = _subscription_status_from_shopify(subscription.get("status", "CANCELLED"))
+    merchant.subscription_status = status
+    merchant.subscription_id = subscription.get("id") or merchant.subscription_id
+    await db.commit()
+    await db.refresh(merchant)
+
+    logger.info(
+        "subscription_cancelled",
+        merchant_id=str(merchant_id),
+        shop=merchant.shop_domain,
+        subscription_id=merchant.subscription_id,
+        status=status.value,
+    )
+
+    return status
+
+
 async def get_subscription_status(
     db: AsyncSession,
     merchant_id: UUID,

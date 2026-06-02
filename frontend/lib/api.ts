@@ -83,6 +83,7 @@ export interface Merchant {
   brand_color: string;
   logo_url: string | null;
   subscription_status: string;
+  subscription_id: string | null;
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
@@ -180,6 +181,12 @@ export async function getShopLogo(): Promise<string | null> {
 export async function activateBilling(): Promise<{ confirmation_url: string }> {
   const res = await fetchWithAuth('/api/billing/activate', { method: 'POST' });
   if (!res.ok) throwApiError(res, 'Failed to activate billing');
+  return res.json();
+}
+
+export async function cancelBilling(): Promise<{ status: string }> {
+  const res = await fetchWithAuth('/api/billing/cancel', { method: 'POST' });
+  if (!res.ok) throwApiError(res, 'Failed to cancel billing');
   return res.json();
 }
 
