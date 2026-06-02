@@ -24,6 +24,36 @@ PLAN_PRICE = 99.0
 PLAN_TRIAL_DAYS = 14
 
 
+def _ensure_aware_utc(value: datetime) -> datetime:
+    """Normalize database datetimes before entitlement comparisons."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def merchant_has_feature_access(merchant: Merchant) -> bool:
+    """
+    Return whether Pleero automation should run for this merchant.
+
+    ACTIVE subscriptions always have access. TRIAL is allowed when it is backed
+    by an approved Shopify subscription, or while the legacy local trial window
+    has not ended.
+    """
+    if merchant.subscription_status == SubscriptionStatus.ACTIVE:
+        return True
+
+    if merchant.subscription_status != SubscriptionStatus.TRIAL:
+        return False
+
+    if merchant.subscription_id:
+        return True
+
+    if not merchant.trial_ends_at:
+        return False
+
+    return _ensure_aware_utc(merchant.trial_ends_at) > datetime.now(UTC)
+
+
 def _subscription_status_from_shopify(status: str) -> SubscriptionStatus:
     """Map Shopify AppSubscriptionStatus values to the local enum."""
     normalized_status = status.upper()

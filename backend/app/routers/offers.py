@@ -17,6 +17,10 @@ from app.core.logging import get_logger
 from app.models.offer import Offer, OfferStatus
 from app.models.merchant import Merchant
 from app.models.offer_event import OfferEvent, EventType
+from app.services.billing import (
+    merchant_has_feature_access,
+    sync_merchant_subscription_from_shopify,
+)
 from app.services.shopify import issue_store_credit, cancel_refund
 from app.services.email import format_currency
 
@@ -204,6 +208,19 @@ async def accept_offer(
         raise HTTPException(
             status_code=500,
             detail="Merchant not found",
+        )
+
+    await sync_merchant_subscription_from_shopify(db, merchant)
+    if not merchant_has_feature_access(merchant):
+        logger.warning(
+            "offer_accept_inactive_subscription",
+            offer_id=str(offer.id),
+            merchant_id=str(merchant.id),
+            subscription_status=merchant.subscription_status.value,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Merchant subscription is inactive",
         )
 
     try:
