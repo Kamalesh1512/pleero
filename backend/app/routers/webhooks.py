@@ -21,6 +21,10 @@ from app.schemas.webhook import (
     RefundWebhookPayload,
     ShopRedactPayload,
 )
+from app.services.billing import (
+    merchant_has_feature_access,
+    sync_merchant_subscription_from_shopify,
+)
 from app.utils.session_auth import revoke_session_for_shop
 from app.utils.shopify_auth import get_valid_access_token
 from app.utils.shopify_webhooks import (
@@ -175,6 +179,17 @@ async def handle_refund_created(
             )
             # Return 200 to prevent retry (shop not installed)
             return {"status": "skipped", "reason": "merchant_not_found"}
+
+        await sync_merchant_subscription_from_shopify(db, merchant)
+        if not merchant_has_feature_access(merchant):
+            logger.info(
+                "offer_bypassed",
+                shop=shop_domain,
+                refund_id=payload.id,
+                reason="inactive_subscription",
+                subscription_status=merchant.subscription_status.value,
+            )
+            return {"status": "skipped", "reason": "inactive_subscription"}
 
         # Parse webhook data
         webhook_data = parse_refund_webhook(payload.model_dump())
