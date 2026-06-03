@@ -76,7 +76,9 @@ def test_subscription_removed_during_trial_preserves_trial_status() -> None:
         trial_ends_at=datetime.now(UTC) + timedelta(days=1),
     )
 
-    assert _status_after_shopify_subscription_removed(merchant) == SubscriptionStatus.TRIAL
+    assert (
+        _status_after_shopify_subscription_removed(merchant) == SubscriptionStatus.TRIAL
+    )
 
 
 def test_subscription_removed_after_trial_expires_subscription() -> None:

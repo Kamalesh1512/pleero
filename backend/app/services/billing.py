@@ -54,17 +54,18 @@ def merchant_has_feature_access(merchant: Merchant) -> bool:
     return _ensure_aware_utc(merchant.trial_ends_at) > datetime.now(UTC)
 
 
-def _status_after_shopify_subscription_removed(merchant: Merchant) -> SubscriptionStatus:
+def _status_after_shopify_subscription_removed(
+    merchant: Merchant,
+) -> SubscriptionStatus:
     """
     Preserve free-trial access after a merchant cancels billing during trial.
 
     Shopify removes the active subscription immediately after cancellation, but
     Pleero still honors the local trial window until trial_ends_at.
     """
-    if (
+    if merchant.trial_ends_at and _ensure_aware_utc(
         merchant.trial_ends_at
-        and _ensure_aware_utc(merchant.trial_ends_at) > datetime.now(UTC)
-    ):
+    ) > datetime.now(UTC):
         return SubscriptionStatus.TRIAL
 
     return SubscriptionStatus.EXPIRED
@@ -396,7 +397,9 @@ async def cancel_subscription(
             merchant_id=str(merchant_id),
             shop=merchant.shop_domain,
         )
-        merchant.subscription_status = _status_after_shopify_subscription_removed(merchant)
+        merchant.subscription_status = _status_after_shopify_subscription_removed(
+            merchant
+        )
         await db.commit()
         return merchant.subscription_status
 
