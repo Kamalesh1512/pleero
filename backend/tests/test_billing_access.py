@@ -5,7 +5,10 @@ Tests for merchant feature entitlement.
 from datetime import UTC, datetime, timedelta
 
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.services.billing import merchant_has_feature_access
+from app.services.billing import (
+    _status_after_shopify_subscription_removed,
+    merchant_has_feature_access,
+)
 
 
 def make_merchant(
@@ -65,3 +68,26 @@ def test_cancelled_subscription_has_no_feature_access() -> None:
     merchant = make_merchant(SubscriptionStatus.CANCELLED)
 
     assert merchant_has_feature_access(merchant) is False
+
+
+def test_subscription_removed_during_trial_preserves_trial_status() -> None:
+    merchant = make_merchant(
+        SubscriptionStatus.ACTIVE,
+        trial_ends_at=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    assert (
+        _status_after_shopify_subscription_removed(merchant) == SubscriptionStatus.TRIAL
+    )
+
+
+def test_subscription_removed_after_trial_expires_subscription() -> None:
+    merchant = make_merchant(
+        SubscriptionStatus.ACTIVE,
+        trial_ends_at=datetime.now(UTC) - timedelta(days=1),
+    )
+
+    assert (
+        _status_after_shopify_subscription_removed(merchant)
+        == SubscriptionStatus.EXPIRED
+    )

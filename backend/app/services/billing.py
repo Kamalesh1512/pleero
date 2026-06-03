@@ -54,6 +54,23 @@ def merchant_has_feature_access(merchant: Merchant) -> bool:
     return _ensure_aware_utc(merchant.trial_ends_at) > datetime.now(UTC)
 
 
+def _status_after_shopify_subscription_removed(
+    merchant: Merchant,
+) -> SubscriptionStatus:
+    """
+    Preserve free-trial access after a merchant cancels billing during trial.
+
+    Shopify removes the active subscription immediately after cancellation, but
+    Pleero still honors the local trial window until trial_ends_at.
+    """
+    if merchant.trial_ends_at and _ensure_aware_utc(
+        merchant.trial_ends_at
+    ) > datetime.now(UTC):
+        return SubscriptionStatus.TRIAL
+
+    return SubscriptionStatus.EXPIRED
+
+
 def _subscription_status_from_shopify(status: str) -> SubscriptionStatus:
     """Map Shopify AppSubscriptionStatus values to the local enum."""
     normalized_status = status.upper()
@@ -148,6 +165,9 @@ async def sync_merchant_subscription_from_shopify(
             exc_info=True,
         )
         return merchant.subscription_status
+
+    if status == SubscriptionStatus.EXPIRED and subscription_id is None:
+        status = _status_after_shopify_subscription_removed(merchant)
 
     merchant.subscription_status = status
     merchant.subscription_id = subscription_id
@@ -377,7 +397,9 @@ async def cancel_subscription(
             merchant_id=str(merchant_id),
             shop=merchant.shop_domain,
         )
-        merchant.subscription_status = SubscriptionStatus.CANCELLED
+        merchant.subscription_status = _status_after_shopify_subscription_removed(
+            merchant
+        )
         await db.commit()
         return merchant.subscription_status
 
@@ -441,8 +463,11 @@ async def cancel_subscription(
 
     subscription = result_data.get("appSubscription") or {}
     status = _subscription_status_from_shopify(subscription.get("status", "CANCELLED"))
+    if status == SubscriptionStatus.CANCELLED:
+        status = _status_after_shopify_subscription_removed(merchant)
+
     merchant.subscription_status = status
-    merchant.subscription_id = subscription.get("id") or merchant.subscription_id
+    merchant.subscription_id = None
     await db.commit()
     await db.refresh(merchant)
 
