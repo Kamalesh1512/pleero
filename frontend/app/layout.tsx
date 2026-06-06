@@ -29,11 +29,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/favicon.ico" },
       { url: "/app-icon.png", type: "image/png", sizes: "32x32" },
-      { url: "/app-icon.png", type: "image/png", sizes: "16x16" },
     ],
     apple: [{ url: "/app-icon.png", type: "image/png", sizes: "180x180" }],
-    shortcut: [{ url: "/app-icon.png", type: "image/png" }],
+    shortcut: "/favicon.ico",
   },
   openGraph: {
     type: "website",
