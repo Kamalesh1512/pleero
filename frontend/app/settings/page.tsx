@@ -28,6 +28,7 @@ export default function Settings() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [logoFetchMessage, setLogoFetchMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -57,11 +58,17 @@ export default function Settings() {
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
   const handleFetchLogo = useCallback(async () => {
+    setLogoFetchMessage(null);
     try {
       const url = await getShopLogo();
-      if (url) setLogoUrl(url);
+      if (url) {
+        setLogoUrl(url);
+        setLogoFetchMessage({ type: 'success', text: 'Logo fetched from Shopify' });
+      } else {
+        setLogoFetchMessage({ type: 'error', text: 'No logo found. Upload a favicon in your Shopify store settings, or enter a URL manually.' });
+      }
     } catch {
-      // best-effort
+      setLogoFetchMessage({ type: 'error', text: 'Failed to fetch logo. Please enter the URL manually.' });
     }
   }, []);
 
@@ -215,6 +222,14 @@ export default function Settings() {
                         Fetch from Shopify
                       </Button>
                     </InlineStack>
+
+                    {logoFetchMessage && (
+                      <Banner
+                        title={logoFetchMessage.text}
+                        tone={logoFetchMessage.type === 'success' ? 'success' : 'critical'}
+                        onDismiss={() => setLogoFetchMessage(null)}
+                      />
+                    )}
 
                     {logoUrl && (
                       <InlineStack gap="300" blockAlign="center">

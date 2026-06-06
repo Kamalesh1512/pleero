@@ -247,13 +247,15 @@ async def get_shop_logo(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str | None]:
     """
-    Fetch the merchant's shop logo from Shopify's brand API.
+    Fetch the merchant's store icon from Shopify.
+
+    Uses the publicly available {shop}/icon.png endpoint (no auth needed).
+    Returns the URL if the store has an icon uploaded, or null otherwise.
 
     Returns:
-        logo_url: CDN URL of the shop logo, or null if not set
+        logo_url: URL of the store icon, or null if not set
     """
     import httpx
-    from app.utils.shopify_auth import get_valid_access_token
 
     result = await db.execute(select(Merchant).where(Merchant.shop_domain == shop))
     merchant = result.scalar_one_or_none()
@@ -261,48 +263,23 @@ async def get_shop_logo(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    access_token = await get_valid_access_token(merchant, db)
-
-    query = """
-    query {
-      shop {
-        brand {
-          logo {
-            image {
-              url
-            }
-          }
-        }
-      }
-    }
-    """
-
-    from app.core.config import settings as app_settings
+    icon_url = f"https://{shop}/icon.png"
 
     try:
-        async with httpx.AsyncClient(
-            headers={
-                "X-Shopify-Access-Token": access_token,
-                "Content-Type": "application/json",
-            },
-            timeout=10.0,
-        ) as client:
-            response = await client.post(
-                f"https://{shop}/admin/api/{app_settings.SHOPIFY_API_VERSION}/graphql.json",
-                json={"query": query},
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.head(icon_url, follow_redirects=True)
+            if response.status_code == 200:
+                logger.info("shop_logo_found", shop=shop, icon_url=icon_url)
+                return {"logo_url": icon_url}
+
+            logger.warning(
+                "shop_logo_not_found",
+                shop=shop,
+                status_code=response.status_code,
             )
-            response.raise_for_status()
-            data = response.json()
-            logo_url = (
-                (data.get("data") or {})
-                .get("shop", {})
-                .get("brand", {})
-                .get("logo", {})
-                .get("image", {})
-                .get("url")
-            )
-            return {"logo_url": logo_url}
+            return {"logo_url": None}
     except Exception:
+        logger.exception("shop_logo_fetch_failed", shop=shop)
         return {"logo_url": None}
 
 
