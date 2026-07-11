@@ -7,16 +7,17 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
-from app.routers import auth, billing, dashboard, offers, webhooks
+from app.core.rate_limit import limiter
+from app.routers import auth, billing, dashboard, offers, waitlist, webhooks
 from app.routers.auth import api_router as auth_api_router
 
 # Configure logging on import
@@ -52,7 +53,6 @@ app = FastAPI(
 )
 
 # Configure rate limiting
-limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -66,7 +66,10 @@ async def validation_exception_handler(
         path=str(request.url.path),
         errors=exc.errors(),
     )
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": exc.errors()}),
+    )
 
 
 # Configure CORS
@@ -77,6 +80,8 @@ _CORS_ORIGINS = [
     "https://www.pleero.app",
     "https://app.pleero.app",
     "https://dev.pleero.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -93,6 +98,7 @@ app.include_router(webhooks.router)
 app.include_router(offers.router)
 app.include_router(dashboard.router)
 app.include_router(billing.router)
+app.include_router(waitlist.router)
 
 
 @app.get("/health")
