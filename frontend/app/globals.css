@@ -30,6 +30,7 @@
   /* Fonts */
   --font-display:          'Inter', sans-serif;  /* TODO: Replace with Geist when available */
   --font-mono:             'DM Mono', monospace;
+  --font-handwritten:      'Caveat', cursive;
 
   /* Radii */
   --radius-sm:             6px;
