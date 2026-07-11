@@ -354,12 +354,16 @@ function OutcomeSection() {
             instead of treating it as an invisible balance.
           </Card>
         </div>
-        <div className="mt-10 rounded-2xl border border-black/10 bg-white p-8 text-center sm:p-12">
-          <p className="text-balance text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl">
-            Store Credit shouldn&apos;t just sit in a customer account.
+        <div className="relative mx-auto mt-10 max-w-3xl -rotate-1 rounded-sm bg-[#FFF9E3] p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition sm:p-12">
+          <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2">
+            <div className="h-4 w-4 rounded-full bg-gradient-to-br from-[#6B7280] to-[#374151] shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
+            <div className="absolute left-1/2 top-3 h-2.5 w-0.5 -translate-x-1/2 bg-[#6B7280]" />
+          </div>
+          <p className="font-handwritten text-balance text-2xl font-semibold leading-[1.4] text-[#0B0C0E] sm:text-4xl">
+            &ldquo;Store Credit shouldn&rsquo;t just sit in a customer account.&rdquo;
           </p>
-          <p className="mt-4 text-balance text-3xl font-black tracking-tight text-[#2D7A4F] sm:text-5xl">
-            It should help create the next purchase.
+          <p className="mt-4 font-handwritten text-balance text-xl font-semibold leading-[1.4] text-[#2D7A4F] sm:text-3xl">
+            It should <span className="text-[#0B0C0E]">help create</span> the next purchase.
           </p>
         </div>
       </div>
@@ -808,40 +812,52 @@ function WaitlistSection() {
 
 function FounderSection() {
   return (
-    <section className="bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+    <section className="bg-[#F7F8FA] px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-4xl">
-          Why I&apos;m building Pleero
-        </h2>
-        <div className="mt-6 space-y-5 text-lg leading-8 text-[#4E5968]">
-          <p>
-            I originally started Pleero around one simple idea: when a customer asks for a refund,
-            could a better Store Credit offer help the merchant retain the relationship and give the
-            customer more value?
-          </p>
-          <p>
-            But while researching the problem, I kept seeing the same pattern. Refund conversion was
-            only one part of a much bigger problem.
-          </p>
-          <p>
-            Merchants could issue Store Credit, but using it strategically, automating it,
-            understanding what gets redeemed, and turning it into another purchase, was still
-            fragmented.
-          </p>
-          <p>That&apos;s the direction I&apos;m exploring with Pleero.</p>
-          <p>
-            I&apos;m speaking with Shopify merchants before building the broader platform because I
-            want the next version to be shaped by real Store Credit workflows, not assumptions.
-          </p>
-          <p>
-            If Store Credit is something you&apos;re trying to make work better in your store,
-            I&apos;d love to learn from you.
-          </p>
-          <p className="font-semibold text-[#0B0C0E]">
-            Kamalesh
-            <br />
-            Founder, Pleero
-          </p>
+        <div className="relative rotate-1 rounded-sm bg-[#FFF9E3] p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] sm:p-10">
+          <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2">
+            <div className="h-4 w-4 rounded-full bg-gradient-to-br from-[#6B7280] to-[#374151] shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
+            <div className="absolute left-1/2 top-3 h-2.5 w-0.5 -translate-x-1/2 bg-[#6B7280]" />
+          </div>
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B0C0E] text-sm font-bold text-white">
+              K
+            </div>
+            <div>
+              <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">Kamalesh</p>
+              <p className="font-handwritten text-sm text-[#2D7A4F]">Founder, Pleero</p>
+            </div>
+          </div>
+          <div className="space-y-4 font-handwritten text-lg leading-[1.6] text-[#0B0C0E] sm:text-xl">
+            <p>
+              I originally started Pleero around one simple idea: when a customer asks for a refund,
+              could a better Store Credit offer help the merchant retain the relationship and give the
+              customer more value?
+            </p>
+            <p>
+              But while researching the problem, I kept seeing the same pattern. Refund conversion was
+              only one part of a much bigger problem.
+            </p>
+            <p>
+              Merchants could issue Store Credit, but using it strategically, automating it,
+              understanding what gets redeemed, and turning it into another purchase, was still
+              fragmented.
+            </p>
+            <p>That&apos;s the direction I&apos;m exploring with Pleero.</p>
+            <p>
+              I&apos;m speaking with Shopify merchants before building the broader platform because I
+              want the next version to be shaped by real <span className="text-[#2D7A4F]">Store Credit workflows</span>, not assumptions.
+            </p>
+            <p>
+              If Store Credit is something you&apos;re trying to make work better in your store,
+              I&apos;d <span className="text-[#2D7A4F]">love to learn from you</span>.
+            </p>
+          </div>
+          <div className="mt-6 border-t border-black/10 pt-4 text-right">
+            <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">
+              Kamalesh
+            </p>
+          </div>
         </div>
       </div>
     </section>

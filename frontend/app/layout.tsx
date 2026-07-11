@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, DM_Mono } from "next/font/google";
+import { Inter, DM_Mono, Caveat } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
@@ -14,6 +14,13 @@ const dmMono = DM_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   variable: "--font-mono",
+  display: "swap",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-handwritten",
   display: "swap",
 });
 
@@ -61,7 +68,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${dmMono.variable} ${caveat.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>
