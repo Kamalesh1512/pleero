@@ -239,21 +239,20 @@ function Hero() {
     <header className="overflow-hidden bg-[#F7F8FA] px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:px-8">
       <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1fr_0.92fr]">
         <div>
-          <Eyebrow>Store Credit Intelligence for Shopify</Eyebrow>
+          <Eyebrow>Store Credit that brings customers back</Eyebrow>
           <h1 className="text-balance text-4xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl lg:text-6xl">
-            Turn Shopify Store Credit into a retention channel.
+            Stop losing money on refunds. Turn them into repeat sales.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4E5968]">
-            Pleero is the intelligence and automation layer for Shopify Store Credit, helping
-            merchants turn refunds, unused credit, and customer moments into opportunities for
-            repeat purchases.
+            When a customer asks for a refund, offer them bonus Store Credit instead. You keep the
+            sale, they get more value, and they come back to spend it.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
-            <SecondaryButton href="#building">See What We&apos;re Building</SecondaryButton>
+            <SecondaryButton href="#building">See How It Works</SecondaryButton>
           </div>
           <p className="mt-5 text-sm font-medium text-[#687281]">
-            Built for Shopify merchants who want to do more with Store Credit.
+            For Shopify merchants who are tired of handing out refunds and getting nothing in return.
           </p>
         </div>
         <DashboardPreview />
@@ -286,36 +285,35 @@ function ProblemSection() {
     <section id="why-pleero" className="bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
-          eyebrow="Shopify built Store Credit. The hard part comes next."
-          title="Store Credit exists. Using it strategically is another story."
-          intro="For many merchants, Store Credit is still a manual tool used after something goes wrong. The balance exists, but the automation, visibility, and customer journey around it are fragmented."
+          eyebrow="You have Store Credit. Getting it to work is the hard part."
+          title="Store Credit should be simple. But right now, it&apos;s a headache."
+          intro="Most Shopify merchants hand out Store Credit after refunds and hope customers come back. There&apos;s no system, no tracking, and no way to know if it&apos;s working."
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card title="Reactive, not strategic">
-            Store Credit is often issued manually after a refund, return, late delivery, or
-            complaint instead of being used intentionally as part of a retention strategy.
+          <Card title="You react instead of planning">
+            You only use Store Credit after something goes wrong — a refund, a complaint, a late
+            delivery. There&apos;s no plan, just putting out fires.
           </Card>
-          <Card title="Limited visibility">
-            You can issue Store Credit, but understanding what gets redeemed, what sits unused, and
-            whether it actually drives another purchase is much harder.
+          <Card title="You have no idea what&apos;s happening">
+            You give out credit, but you don&apos;t know if customers ever use it. Does it sit
+            there forever? Did it bring anyone back? You&apos;re guessing.
           </Card>
-          <Card title="Fragmented automation">
-            Turning customer behavior into Store Credit workflows can mean stitching together Flow,
-            custom logic, multiple apps, or manual processes.
+          <Card title="It&apos;s a mess to manage">
+            Want to automate Store Credit? You&apos;re stuck juggling apps, custom code, and
+            spreadsheets. There&apos;s no simple way.
           </Card>
-          <Card title="Customers forget it exists">
-            If customers cannot easily see, understand, or remember their Store Credit, the balance
-            sits unused instead of bringing them back.
+          <Card title="Customers forget they have it">
+            Customers get Store Credit and forget. The money sits in their account, and you never
+            see them again.
           </Card>
         </div>
         <div className="mt-10 rounded-2xl bg-[#0B0C0E] p-6 text-white sm:p-8 lg:p-10">
           <p className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
-            The problem isn&apos;t Store Credit itself. The problem is everything that needs to
-            happen around it.
+            Store Credit could be your best retention tool. But without the right system, it&apos;s
+            just another thing to manage.
           </p>
           <p className="mt-4 max-w-3xl leading-7 text-[#C8CED7]">
-            Shopify provides the infrastructure. Merchants still need the intelligence, automation,
-            and customer experience to turn Store Credit into a measurable growth channel.
+            You have the feature. You just need the right way to use it.
           </p>
           <div className="mt-6">
             <button
@@ -337,21 +335,21 @@ function OutcomeSection() {
     <section className="bg-[#F7F8FA] px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
-          eyebrow="A better way to think about Store Credit"
-          title="What if Store Credit worked like a growth channel?"
+          eyebrow="Imagine Store Credit that works for you"
+          title="What if every refund brought a customer back?"
         />
         <div className="grid gap-4 md:grid-cols-3">
-          <Card title="Retain more value when refunds happen" muted>
-            Give customers a compelling choice between a standard refund and a higher-value Store
-            Credit offer without forcing Store Credit on them.
+          <Card title="Keep more money when refunds happen" muted>
+            Instead of sending cash out the door, offer extra Store Credit. They get more value.
+            You keep the sale.
           </Card>
-          <Card title="Bring customers back intentionally" muted>
-            Use Store Credit across refund recovery, retention campaigns, VIP rewards, customer
-            milestones, and win-back journeys.
+          <Card title="Bring customers back on purpose" muted>
+            Use credit to reward loyal customers, celebrate milestones, or win back shoppers who
+            haven&apos;t visited in a while.
           </Card>
-          <Card title="Know what's actually working" muted>
-            Understand how Store Credit is issued, redeemed, and connected to repeat purchases
-            instead of treating it as an invisible balance.
+          <Card title="See what&apos;s actually working" muted>
+            See exactly how much credit you&apos;ve given, how much gets used, and how many
+            customers come back because of it.
           </Card>
         </div>
         <div className="relative mx-auto mt-10 max-w-3xl -rotate-1 rounded-sm bg-[#FFF9E3] p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition sm:p-12">
@@ -375,23 +373,23 @@ function VisionSection() {
   const cards = [
     [
       "Refund Recovery",
-      "Turn a refund into a choice.",
-      "Explore personalized bonus Store Credit offers that give customers a reason to shop again while preserving their option to receive a standard refund.",
+      "Turn refunds into repeat sales.",
+      "When a customer asks for a refund, give them a choice: cash back or bonus credit. Most pick the credit — and come back to spend it.",
     ],
     [
       "Credit Intelligence",
-      "See what happens after credit is issued.",
-      "Understand issuance, redemption, outstanding balances, repeat purchases, and the real performance of Store Credit.",
+      "Track every dollar of credit.",
+      "Know how much credit you issued, how much got spent, and who came back to shop again.",
     ],
     [
       "Smart Automation",
-      "Use Store Credit at the right customer moments.",
-      "Explore workflows around refunds, customer milestones, VIP rewards, spending thresholds, and retention campaigns.",
+      "Automate offers without the work.",
+      "Set up automatic offers for refunds, repeat customers, birthdays, or VIPs. No manual work.",
     ],
     [
       "Redemption Journeys",
-      "Don't let valuable credit disappear into an account.",
-      "Explore reminders and customer journeys designed to make Store Credit easier to discover and redeem.",
+      "Remind customers to come back.",
+      "Send automatic nudges when customers have unused credit. A simple reminder can turn forgotten credit into a new order.",
     ],
   ];
 
@@ -400,19 +398,17 @@ function VisionSection() {
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
-            <Eyebrow>Introducing the vision</Eyebrow>
+            <Eyebrow>What we&apos;re building</Eyebrow>
             <h2 className="text-balance text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl">
-              The Store Credit Intelligence Platform for Shopify
+              Simple tools to make Store Credit work harder
             </h2>
             <p className="mt-5 text-lg leading-8 text-[#4E5968]">
-              Pleero is building a dedicated intelligence and automation layer for Shopify Store
-              Credit, designed to help merchants decide when to use credit, create better customer
-              experiences, and understand its impact on retention and revenue.
+              We&apos;re building tools that help you use Store Credit automatically, see clear
+              results, and stop guessing.
             </p>
             <p className="mt-5 rounded-xl border border-[#2D7A4F]/20 bg-[#E8F5EE] p-5 leading-7 text-[#244434]">
-              We&apos;re currently speaking with Shopify merchants and shaping the next version of
-              Pleero around the problems that matter most. Join the waitlist to get early access and
-              help influence what we build.
+              We&apos;re talking to Shopify merchants like you to build what actually matters. Join
+              the waitlist to get early access and help shape what we build.
             </p>
             <div className="mt-6">
               <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
@@ -431,8 +427,8 @@ function VisionSection() {
               ))}
             </div>
             <p className="mt-4 text-sm font-medium text-[#687281]">
-              These are areas we&apos;re actively exploring. Your feedback will help determine what
-              we build first.
+              These are the areas we&apos;re working on. Your feedback will help decide what we
+              build first.
             </p>
           </div>
         </div>
@@ -445,23 +441,23 @@ function StepsSection() {
   return (
     <section className="bg-[#F7F8FA] px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <SectionHeading title="From Store Credit balance to repeat purchase" />
+        <SectionHeading title="How Pleero works in three steps" />
         <div className="grid gap-4 md:grid-cols-3">
           {[
             [
               "01",
-              "Choose the moment",
-              "A refund, customer milestone, retention campaign, or another high-value event creates an opportunity.",
+              "Pick when to offer credit",
+              "Set up offers for refunds, repeat purchases, VIP moments, or any time you choose.",
             ],
             [
               "02",
-              "Deliver the right Store Credit experience",
-              "Give the customer a clear, relevant reason to return instead of issuing credit with no strategy around it.",
+              "Give them a reason to come back",
+              "Customers see a simple offer — bonus credit instead of a refund. Clear choice, easy to understand.",
             ],
             [
               "03",
-              "Measure what happens next",
-              "Understand whether Store Credit gets redeemed and whether it contributes to another purchase.",
+              "See the results",
+              "Track how much credit gets used, how many customers return, and how much revenue you kept.",
             ],
           ].map(([step, title, copy]) => (
             <div key={step} className="rounded-xl border border-black/10 bg-white p-6">
@@ -623,12 +619,12 @@ function WaitlistForm() {
           You&apos;re on the list.
         </h3>
         <p className="mt-4 leading-7 text-[#244434]">
-          Thanks for helping shape Pleero. We&apos;ll use your feedback to decide what we build next
-          and reach out when early access becomes available.
+          Thanks for signing up. Your feedback will help us build something that actually solves
+          real problems. We&apos;ll reach out when early access is ready.
         </p>
         {form.interviewWillingness === "Yes, happy to chat" && (
           <p className="mt-3 leading-7 text-[#244434]">
-            We may also reach out for a short conversation about your Store Credit workflow.
+            We may reach out for a quick chat to learn more about how you use Store Credit today.
           </p>
         )}
       </div>
@@ -797,11 +793,11 @@ function WaitlistSection() {
         <div className="text-white">
           <Eyebrow>Early Access</Eyebrow>
           <h2 className="text-balance text-3xl font-black tracking-tight sm:text-5xl">
-            Help shape the future of Store Credit on Shopify.
+            Help us build something you&apos;ll actually use.
           </h2>
           <p className="mt-5 text-lg leading-8 text-[#C8CED7]">
-            We&apos;re looking for Shopify merchants who already use Store Credit, or want to use it
-            more strategically. Tell us how you handle it today and what you wish worked better.
+            We&apos;re looking for Shopify merchants who use Store Credit — or want to. Tell us
+            how you handle things today and what you wish was easier.
           </p>
         </div>
         <WaitlistForm />
@@ -830,27 +826,25 @@ function FounderSection() {
           </div>
           <div className="space-y-4 font-handwritten text-lg leading-[1.6] text-[#0B0C0E] sm:text-xl">
             <p>
-              I originally started Pleero around one simple idea: when a customer asks for a refund,
-              could a better Store Credit offer help the merchant retain the relationship and give the
-              customer more value?
+              I started Pleero with a simple idea: when a customer asks for a refund, what if you
+              could offer them bonus Store Credit instead? You keep the sale. They get more value.
             </p>
             <p>
-              But while researching the problem, I kept seeing the same pattern. Refund conversion was
-              only one part of a much bigger problem.
+              But the more I talked to merchants, the more I realized the problem was bigger. Store
+              Credit was everywhere, but nobody had a simple way to use it well.
             </p>
             <p>
-              Merchants could issue Store Credit, but using it strategically, automating it,
-              understanding what gets redeemed, and turning it into another purchase, was still
-              fragmented.
+              Merchants could issue credit, but automating it, tracking it, and turning it into
+              actual sales was a mess.
             </p>
-            <p>That&apos;s the direction I&apos;m exploring with Pleero.</p>
+            <p>That&apos;s what I&apos;m working on with Pleero.</p>
             <p>
-              I&apos;m speaking with Shopify merchants before building the broader platform because I
-              want the next version to be shaped by real <span className="text-[#2D7A4F]">Store Credit workflows</span>, not assumptions.
+              I&apos;m talking to Shopify merchants before building anything big, because I want to
+              build what people actually need — not what I <em>think</em> they need.
             </p>
             <p>
-              If Store Credit is something you&apos;re trying to make work better in your store,
-              I&apos;d <span className="text-[#2D7A4F]">love to learn from you</span>.
+              If Store Credit is something you deal with every day, I&apos;d{" "}
+              <span className="text-[#2D7A4F]">love to hear your story</span>.
             </p>
           </div>
           <div className="mt-6 border-t border-black/10 pt-4 text-right">
@@ -869,13 +863,13 @@ function FinalCta() {
     <section className="bg-[#F7F8FA] px-4 py-16 text-center sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <h2 className="text-balance text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl">
-          Store Credit is already in Shopify.
+          You already have Store Credit in Shopify.
           <br />
-          Now let&apos;s make it work harder.
+          Let&apos;s make it actually work for you.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#4E5968]">
-          Join the early access waitlist and help shape a better way to use Store Credit for
-          retention, refund recovery, and repeat purchases.
+          Join the early access waitlist and help us build a better way to turn refunds into repeat
+          sales.
         </p>
         <div className="mt-8">
           <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
