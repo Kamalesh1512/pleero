@@ -140,7 +140,10 @@ export default function StoreCreditReport({
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="monthlyIssued" className="mb-2 block text-sm font-bold text-[#0B0C0E]">
+                  <label
+                    htmlFor="monthlyIssued"
+                    className="mb-2 block text-sm font-bold text-[#0B0C0E]"
+                  >
                     Monthly Store Credit issued ($)
                   </label>
                   <input
@@ -154,7 +157,10 @@ export default function StoreCreditReport({
                   />
                 </div>
                 <div>
-                  <label htmlFor="redemptionRate" className="mb-2 block text-sm font-bold text-[#0B0C0E]">
+                  <label
+                    htmlFor="redemptionRate"
+                    className="mb-2 block text-sm font-bold text-[#0B0C0E]"
+                  >
                     Estimated redemption rate (%)
                   </label>
                   <input
@@ -214,7 +220,10 @@ export default function StoreCreditReport({
                 can pull your real numbers from Shopify.
               </p>
               <div>
-                <label htmlFor="reportEmail" className="mb-2 block text-sm font-bold text-[#0B0C0E]">
+                <label
+                  htmlFor="reportEmail"
+                  className="mb-2 block text-sm font-bold text-[#0B0C0E]"
+                >
                   Work email
                 </label>
                 <input

@@ -24,7 +24,9 @@ class TestReportRequest:
 
     async def test_create_report_request(self, client, db_session):
         """A valid payload creates a normalized report request."""
-        response = await client.post("/api/report-requests", json=valid_report_payload())
+        response = await client.post(
+            "/api/report-requests", json=valid_report_payload()
+        )
 
         assert response.status_code == 200
         assert response.json()["status"] == "success"

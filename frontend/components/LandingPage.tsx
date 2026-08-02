@@ -105,13 +105,7 @@ function SectionHeading({
   );
 }
 
-function PrimaryButton({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-}) {
+function PrimaryButton({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
     <button
       type="button"
@@ -246,18 +240,17 @@ function Hero({ onGetReport }: { onGetReport: () => void }) {
             How much of your Store Credit actually comes back to you?
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4E5968]">
-            Pleero shows you exactly how much Store Credit gets redeemed, how much revenue it
-            brings back, and how much is about to expire — no matter which app issued it. Shopify
-            native, Loop, AfterShip, ReturnGO, Rise.ai, or a pile of manual gift-card codes. One
-            view.
+            Pleero shows you exactly how much Store Credit gets redeemed, how much revenue it brings
+            back, and how much is about to expire — no matter which app issued it. Shopify native,
+            Loop, AfterShip, ReturnGO, Rise.ai, or a pile of manual gift-card codes. One view.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>
             <SecondaryButton href="#what-youll-see">See What You&apos;re Missing</SecondaryButton>
           </div>
           <p className="mt-5 text-sm font-medium text-[#687281]">
-            For Shopify merchants who issue Store Credit and have no real way to tell if
-            it&apos;s working.
+            For Shopify merchants who issue Store Credit and have no real way to tell if it&apos;s
+            working.
           </p>
         </div>
         <DashboardPreview />
@@ -291,11 +284,11 @@ function ProblemSection() {
       <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="You have Store Credit. Knowing if it works is the hard part."
-          title="Store Credit shouldn&apos;t be a black box."
-          intro="Most Shopify merchants issue Store Credit — through Shopify itself, a returns app, or a loyalty tool — and then lose track of it completely. No single view. No idea what&apos;s working. No idea what&apos;s about to expire unused."
+          title="Store Credit shouldn't be a black box."
+          intro="Most Shopify merchants issue Store Credit — through Shopify itself, a returns app, or a loyalty tool — and then lose track of it completely. No single view. No idea what's working. No idea what's about to expire unused."
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card title="You don&apos;t know your redemption rate">
+          <Card title="You don't know your redemption rate">
             You&apos;ve issued Store Credit for months. You have no idea what percentage of it
             customers actually use.
           </Card>
@@ -307,7 +300,7 @@ function ProblemSection() {
             Unused credit sits in customer accounts until it expires, and nobody&apos;s watching the
             clock or reminding anyone.
           </Card>
-          <Card title="You can&apos;t prove it&apos;s working">
+          <Card title="You can't prove it's working">
             When someone asks &ldquo;is Store Credit actually bringing customers back,&rdquo; you
             don&apos;t have a number to give them.
           </Card>
@@ -350,8 +343,7 @@ function OutcomeSection() {
             issue it.
           </Card>
           <Card title="Catch credit before it expires" muted>
-            Get an alert when balances are about to expire, with a ready-made list of who to
-            remind.
+            Get an alert when balances are about to expire, with a ready-made list of who to remind.
           </Card>
           <Card title="Finally prove the ROI" muted>
             Walk into your next planning meeting with a real number for what Store Credit is doing
@@ -367,8 +359,8 @@ function OutcomeSection() {
             &ldquo;Store Credit shouldn&rsquo;t just sit in a customer account.&rdquo;
           </p>
           <p className="mt-4 font-handwritten text-balance text-xl font-semibold leading-[1.4] text-[#2D7A4F] sm:text-3xl">
-            It should <span className="text-[#0B0C0E]">prove the next purchase</span> — or tell
-            you exactly why it didn&apos;t.
+            It should <span className="text-[#0B0C0E]">prove the next purchase</span> — or tell you
+            exactly why it didn&apos;t.
           </p>
         </div>
       </div>
@@ -405,7 +397,10 @@ function VisionSection({ onGetReport }: { onGetReport: () => void }) {
   ];
 
   return (
-    <section id="what-youll-see" className="scroll-mt-20 bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+    <section
+      id="what-youll-see"
+      className="scroll-mt-20 bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
@@ -415,8 +410,8 @@ function VisionSection({ onGetReport }: { onGetReport: () => void }) {
             </h2>
             <p className="mt-5 text-lg leading-8 text-[#4E5968]">
               We&apos;re not building another way to issue Store Credit — you probably already have
-              one. We&apos;re building the layer that tells you whether it&apos;s working, no
-              matter which tool you use to issue it.
+              one. We&apos;re building the layer that tells you whether it&apos;s working, no matter
+              which tool you use to issue it.
             </p>
             <p className="mt-5 rounded-xl border border-[#2D7A4F]/20 bg-[#E8F5EE] p-5 leading-7 text-[#244434]">
               We&apos;re talking to Shopify merchants before building anything else. Join early
@@ -429,7 +424,10 @@ function VisionSection({ onGetReport }: { onGetReport: () => void }) {
           <div>
             <div className="grid gap-4 md:grid-cols-2">
               {cards.map((card) => (
-                <div key={card.label} className="rounded-xl border border-black/10 bg-[#F7F8FA] p-6">
+                <div
+                  key={card.label}
+                  className="rounded-xl border border-black/10 bg-[#F7F8FA] p-6"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#2D7A4F]">
                       {card.label}
@@ -440,7 +438,9 @@ function VisionSection({ onGetReport }: { onGetReport: () => void }) {
                       </span>
                     )}
                   </div>
-                  <h3 className="mt-3 text-xl font-bold tracking-tight text-[#0B0C0E]">{card.title}</h3>
+                  <h3 className="mt-3 text-xl font-bold tracking-tight text-[#0B0C0E]">
+                    {card.title}
+                  </h3>
                   <p className="mt-3 leading-7 text-[#5D6673]">{card.copy}</p>
                 </div>
               ))}
@@ -821,9 +821,9 @@ function WaitlistSection({ prefillEmail }: { prefillEmail?: string }) {
             Help us build the report you actually need.
           </h2>
           <p className="mt-5 text-lg leading-8 text-[#C8CED7]">
-            We&apos;re talking to Shopify merchants who already issue Store Credit — through
-            Shopify native, Loop, AfterShip, ReturnGO, Rise.ai, or manually — before we build
-            anything else. Tell us what you wish you could see.
+            We&apos;re talking to Shopify merchants who already issue Store Credit — through Shopify
+            native, Loop, AfterShip, ReturnGO, Rise.ai, or manually — before we build anything else.
+            Tell us what you wish you could see.
           </p>
         </div>
         <WaitlistForm prefillEmail={prefillEmail} />
@@ -861,8 +861,8 @@ function FounderSection() {
               tools, a returns app, a loyalty app, or just a pile of gift-card codes.
             </p>
             <p>
-              What none of them had was a way to know if it was working. How much gets redeemed.
-              How much just sits there. How much is about to quietly expire. Nobody could give me a
+              What none of them had was a way to know if it was working. How much gets redeemed. How
+              much just sits there. How much is about to quietly expire. Nobody could give me a
               straight answer, and nobody had a tool that could either.
             </p>
             <p>
@@ -879,9 +879,7 @@ function FounderSection() {
             </p>
           </div>
           <div className="mt-6 border-t border-black/10 pt-4 text-right">
-            <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">
-              Kamalesh
-            </p>
+            <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">Kamalesh</p>
           </div>
         </div>
       </div>
@@ -899,8 +897,8 @@ function FinalCta({ onGetReport }: { onGetReport: () => void }) {
           Let&apos;s find out if it&apos;s actually working.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#4E5968]">
-          Join early access and help us build the report that finally tells you the truth about
-          your Store Credit — no matter what issues it.
+          Join early access and help us build the report that finally tells you the truth about your
+          Store Credit — no matter what issues it.
         </p>
         <div className="mt-8">
           <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>

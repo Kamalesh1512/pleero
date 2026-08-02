@@ -15,7 +15,10 @@ def valid_waitlist_payload() -> dict[str, object]:
         "storeUrl": "https://example-store.myshopify.com/",
         "businessCategory": "Apparel / Fashion",
         "monthlyOrders": "100-500",
-        "creditSources": ["Shopify's native Store Credit", "A returns app (Loop, AfterShip, ReturnGO, etc.)"],
+        "creditSources": [
+            "Shopify's native Store Credit",
+            "A returns app (Loop, AfterShip, ReturnGO, etc.)",
+        ],
         "biggestPain": "I don't know what % of it actually gets redeemed",
         "openResponse": "I want to know whether credit actually drives repeat purchases.",
         "valuableCapability": "A single dashboard showing redemption rate and revenue brought back",
