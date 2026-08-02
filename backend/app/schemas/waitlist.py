@@ -24,33 +24,31 @@ MONTHLY_ORDER_VOLUMES = {
     "10,000+",
 }
 
-CURRENT_USE_CASES = {
-    "Refunds or returns",
-    "Customer service / goodwill",
-    "Loyalty or rewards",
-    "Promotions or campaigns",
-    "VIP customers",
+CREDIT_SOURCES = {
+    "Shopify's native Store Credit",
+    "A returns app (Loop, AfterShip, ReturnGO, etc.)",
+    "A loyalty or gift-card app (Rise.ai, Smile.io, etc.)",
+    "Manually — gift cards, discount codes, or a spreadsheet",
     "We don't use Store Credit yet",
-    "Other",
+    "Not sure",
 }
 
 PAIN_POINTS = {
-    "Converting refunds into Store Credit",
-    "Automating when Store Credit is issued",
-    "Understanding whether Store Credit gets redeemed",
-    "Getting customers to come back and use their credit",
-    "Reporting and analytics",
-    "Bulk management",
-    "Customer communication and notifications",
+    "I don't know what % of it actually gets redeemed",
+    "I can't tell if it's bringing customers back or just sitting there",
+    "Our Store Credit data is scattered across different tools",
+    "I don't know how much is about to expire unused",
+    "Converting refunds into Store Credit in the first place",
+    "Automating when Store Credit gets issued",
     "Something else",
 }
 
 CAPABILITIES = {
-    "Refund-to-Store-Credit conversion",
-    "Store Credit analytics and reporting",
-    "Automated Store Credit workflows",
-    "Customer reminders and redemption campaigns",
-    "All-in-one Store Credit platform",
+    "A single dashboard showing redemption rate and revenue brought back",
+    "Alerts for credit that's about to expire, unused",
+    "One view across every tool that issues our Store Credit",
+    "Automatic reminders to customers with unused credit",
+    "A bonus-credit offer at checkout or during returns",
     "Something else",
 }
 
@@ -68,7 +66,7 @@ class WaitlistSubmissionCreate(BaseModel):
     store_url: str = Field(alias="storeUrl", min_length=4, max_length=255)
     business_category: str = Field(alias="businessCategory")
     monthly_orders: str = Field(alias="monthlyOrders")
-    current_use_cases: list[str] = Field(alias="currentUseCases", min_length=1)
+    credit_sources: list[str] = Field(alias="creditSources", min_length=1)
     biggest_pain: str = Field(alias="biggestPain")
     open_response: str = Field(alias="openResponse", min_length=10, max_length=3000)
     valuable_capability: str = Field(alias="valuableCapability")
@@ -102,9 +100,9 @@ class WaitlistSubmissionCreate(BaseModel):
     def strip_text(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("current_use_cases")
+    @field_validator("credit_sources")
     @classmethod
-    def strip_use_cases(cls, value: list[str]) -> list[str]:
+    def strip_credit_sources(cls, value: list[str]) -> list[str]:
         return [item.strip() for item in value if item.strip()]
 
     @model_validator(mode="after")
@@ -113,10 +111,10 @@ class WaitlistSubmissionCreate(BaseModel):
             raise ValueError("Choose a valid business category.")
         if self.monthly_orders not in MONTHLY_ORDER_VOLUMES:
             raise ValueError("Choose a valid monthly order volume.")
-        if not self.current_use_cases or any(
-            use_case not in CURRENT_USE_CASES for use_case in self.current_use_cases
+        if not self.credit_sources or any(
+            source not in CREDIT_SOURCES for source in self.credit_sources
         ):
-            raise ValueError("Choose valid Store Credit use cases.")
+            raise ValueError("Choose valid Store Credit sources.")
         if self.biggest_pain not in PAIN_POINTS:
             raise ValueError("Choose a valid Store Credit challenge.")
         if self.valuable_capability not in CAPABILITIES:

@@ -25,11 +25,11 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "Pleero - Store Credit Intelligence for Shopify",
+  title: "Pleero - Store Credit Analytics for Shopify",
   description:
-    "Pleero is the Store Credit Intelligence Platform for Shopify, helping merchants turn Store Credit into a smarter retention, refund recovery, and repeat purchase channel.",
+    "The missing analytics layer for Shopify Store Credit: redemption rate, revenue retained, and what's about to expire - across every tool you use.",
   keywords:
-    "Shopify Store Credit, store credit intelligence, refund recovery, retention marketing, repeat purchases, Shopify merchants",
+    "Shopify Store Credit, store credit analytics, Store Credit Intelligence, expired store credit, store credit redemption rate, refund recovery, loop returns, aftership, rise.ai, Shopify merchants",
   authors: [{ name: "Pleero" }],
   creator: "Pleero",
   metadataBase: new URL("https://pleero.app"),
@@ -44,16 +44,16 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "https://pleero.app",
-    title: "Pleero - Store Credit Intelligence for Shopify",
+    title: "Pleero - Store Credit Analytics for Shopify",
     description:
-      "Join the early access waitlist and help shape a better way to use Store Credit for retention, refund recovery, and repeat purchases.",
+      "The missing analytics layer for Shopify Store Credit: redemption rate, revenue retained, and what's about to expire - across every tool you use.",
     siteName: "Pleero",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pleero - Store Credit Intelligence for Shopify",
+    title: "Pleero - Store Credit Analytics for Shopify",
     description:
-      "Pleero is building the intelligence and automation layer for Shopify Store Credit.",
+      "See how much Store Credit gets redeemed, the revenue it brings back, and what's about to expire - across Shopify native, Loop, AfterShip, ReturnGO, Rise.ai, and manual gift cards.",
   },
   robots: {
     index: true,

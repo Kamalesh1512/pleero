@@ -59,6 +59,21 @@ api.pleero.app {
     # For webhook endpoints, we don't rate limit (Shopify needs reliable delivery)
 }
 
+automation.bhworkspace.com {
+
+    tls /data/origin-cert.pem /data/origin-key.pem
+
+    encode gzip
+
+    reverse_proxy automation_n8n:5678 {
+        header_up Host {host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+
 # Health check endpoint for monitoring
 :8080 {
     respond /health 200 {

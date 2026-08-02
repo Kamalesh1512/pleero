@@ -1,14 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import StoreCreditReport from "@/components/StoreCreditReport";
 
 type WaitlistData = {
   email: string;
   storeUrl: string;
   businessCategory: string;
   monthlyOrders: string;
-  currentUseCases: string[];
+  creditSources: string[];
   biggestPain: string;
   openResponse: string;
   valuableCapability: string;
@@ -20,7 +21,7 @@ const initialForm: WaitlistData = {
   storeUrl: "",
   businessCategory: "",
   monthlyOrders: "",
-  currentUseCases: [],
+  creditSources: [],
   biggestPain: "",
   openResponse: "",
   valuableCapability: "",
@@ -38,33 +39,31 @@ const businessCategories = [
 
 const monthlyOrders = ["Fewer than 100", "100-500", "500-2,000", "2,000-10,000", "10,000+"];
 
-const currentUseCases = [
-  "Refunds or returns",
-  "Customer service / goodwill",
-  "Loyalty or rewards",
-  "Promotions or campaigns",
-  "VIP customers",
+const creditSourceOptions = [
+  "Shopify's native Store Credit",
+  "A returns app (Loop, AfterShip, ReturnGO, etc.)",
+  "A loyalty or gift-card app (Rise.ai, Smile.io, etc.)",
+  "Manually — gift cards, discount codes, or a spreadsheet",
   "We don't use Store Credit yet",
-  "Other",
+  "Not sure",
 ];
 
 const painPoints = [
-  "Converting refunds into Store Credit",
-  "Automating when Store Credit is issued",
-  "Understanding whether Store Credit gets redeemed",
-  "Getting customers to come back and use their credit",
-  "Reporting and analytics",
-  "Bulk management",
-  "Customer communication and notifications",
+  "I don't know what % of it actually gets redeemed",
+  "I can't tell if it's bringing customers back or just sitting there",
+  "Our Store Credit data is scattered across different tools",
+  "I don't know how much is about to expire unused",
+  "Converting refunds into Store Credit in the first place",
+  "Automating when Store Credit gets issued",
   "Something else",
 ];
 
 const capabilities = [
-  "Refund-to-Store-Credit conversion",
-  "Store Credit analytics and reporting",
-  "Automated Store Credit workflows",
-  "Customer reminders and redemption campaigns",
-  "All-in-one Store Credit platform",
+  "A single dashboard showing redemption rate and revenue brought back",
+  "Alerts for credit that's about to expire, unused",
+  "One view across every tool that issues our Store Credit",
+  "Automatic reminders to customers with unused credit",
+  "A bonus-credit offer at checkout or during returns",
   "Something else",
 ];
 
@@ -106,11 +105,11 @@ function SectionHeading({
   );
 }
 
-function PrimaryButton({ children }: { children: React.ReactNode }) {
+function PrimaryButton({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
     <button
       type="button"
-      onClick={scrollToWaitlist}
+      onClick={onClick}
       className="inline-flex min-h-12 items-center justify-center rounded-lg bg-[#0B0C0E] px-6 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(11,12,14,0.18)] transition hover:bg-[#1D2023] focus:outline-none focus:ring-4 focus:ring-[#2D7A4F]/25"
     >
       {children}
@@ -129,7 +128,7 @@ function SecondaryButton({ children, href }: { children: React.ReactNode; href: 
   );
 }
 
-function Nav() {
+function Nav({ onGetReport }: { onGetReport: () => void }) {
   return (
     <nav className="sticky top-0 z-50 border-b border-black/10 bg-[#F7F8FA]/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -139,16 +138,16 @@ function Nav() {
         </a>
         <div className="hidden items-center gap-7 md:flex">
           <a
-            href="#why-pleero"
+            href="#problem"
             className="text-sm font-medium text-[#5D6673] no-underline hover:text-[#0B0C0E]"
           >
-            Why Pleero
+            The Problem
           </a>
           <a
-            href="#building"
+            href="#what-youll-see"
             className="text-sm font-medium text-[#5D6673] no-underline hover:text-[#0B0C0E]"
           >
-            What We&apos;re Building
+            What You&apos;ll See
           </a>
           <a
             href="#early-access"
@@ -157,7 +156,7 @@ function Nav() {
             Early Access
           </a>
         </div>
-        <PrimaryButton>Join the Waitlist</PrimaryButton>
+        <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>
       </div>
     </nav>
   );
@@ -165,9 +164,9 @@ function Nav() {
 
 function DashboardPreview() {
   const rows = [
-    ["Refund recovery offer", "Choice presented", "$110 credit option"],
-    ["Credit reminder", "Ready to send", "Balance visible"],
-    ["VIP milestone", "Exploring", "Reward trigger"],
+    ["Credit expiring in 7 days", "$340 at risk", "Win-back nudge suggested"],
+    ["Redemption spike detected", "+18% this week", "Mostly Loop-issued credit"],
+    ["Cross-tool reconciliation", "3 sources synced", "Shopify native + AfterShip + manual"],
   ];
 
   return (
@@ -177,7 +176,7 @@ function DashboardPreview() {
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#7A8492]">
             Concept preview
           </p>
-          <h3 className="mt-1 text-lg font-bold text-[#0B0C0E]">Store Credit Intelligence</h3>
+          <h3 className="mt-1 text-lg font-bold text-[#0B0C0E]">Store Credit, finally visible</h3>
         </div>
         <span className="rounded-full bg-[#E8F5EE] px-3 py-1 text-xs font-bold text-[#2D7A4F]">
           Shopify
@@ -187,8 +186,8 @@ function DashboardPreview() {
         {[
           ["Credit issued", "$4,820", "Demo period"],
           ["Redemption rate", "38%", "Illustrative"],
-          ["Revenue retained", "$1,460", "Concept metric"],
-          ["Outstanding credit", "$2,990", "Needs action"],
+          ["Revenue brought back", "$1,460", "Spend above balance"],
+          ["Expiring in 30 days", "$1,240", "Win-back opportunity"],
         ].map(([label, value, note]) => (
           <div key={label} className="rounded-xl border border-black/10 bg-[#F7F8FA] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7A8492]">
@@ -216,43 +215,42 @@ function DashboardPreview() {
       </div>
       <div className="mt-4 rounded-xl bg-[#0B0C0E] p-4 text-white">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9CA3AF]">
-          Refund to credit
+          Where your Store Credit comes from
         </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-          <div className="rounded-lg bg-white/10 p-3">
-            <p className="text-sm text-[#D5DAE1]">Standard refund</p>
-            <p className="text-xl font-bold">$100</p>
-          </div>
-          <span className="text-center text-sm font-bold text-[#6FCF97]">or</span>
-          <div className="rounded-lg bg-[#E8F5EE] p-3 text-[#0B0C0E]">
-            <p className="text-sm text-[#3E4B43]">Bonus Store Credit</p>
-            <p className="text-xl font-bold">$110</p>
-          </div>
-        </div>
+        <p className="mt-3 text-sm leading-7 text-[#D5DAE1]">
+          Shopify native — 40% · Loop / AfterShip — 25% · Manual gift cards — 20% · Rise.ai — 15%
+        </p>
+        <p className="mt-2 text-xs text-[#9CA3AF]">One dashboard. Every source.</p>
       </div>
     </div>
   );
 }
 
-function Hero() {
+function Hero({ onGetReport }: { onGetReport: () => void }) {
   return (
     <header className="overflow-hidden bg-[#F7F8FA] px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:px-8">
       <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1fr_0.92fr]">
         <div>
-          <Eyebrow>Store Credit that brings customers back</Eyebrow>
+          <Eyebrow>You already issue Store Credit. Do you know if it&apos;s working?</Eyebrow>
+          {/* Recommended H1. A/B alternates (refund framing): "Stop guessing whether your
+              refund-to-credit strategy is working."
+              (finance/loss-aversion framing): "How much unused Store Credit is sitting on your
+              books right now?" */}
           <h1 className="text-balance text-4xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl lg:text-6xl">
-            Stop losing money on refunds. Turn them into repeat sales.
+            How much of your Store Credit actually comes back to you?
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4E5968]">
-            When a customer asks for a refund, offer them bonus Store Credit instead. You keep the
-            sale, they get more value, and they come back to spend it.
+            Pleero shows you exactly how much Store Credit gets redeemed, how much revenue it brings
+            back, and how much is about to expire — no matter which app issued it. Shopify native,
+            Loop, AfterShip, ReturnGO, Rise.ai, or a pile of manual gift-card codes. One view.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
-            <SecondaryButton href="#building">See How It Works</SecondaryButton>
+            <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>
+            <SecondaryButton href="#what-youll-see">See What You&apos;re Missing</SecondaryButton>
           </div>
           <p className="mt-5 text-sm font-medium text-[#687281]">
-            For Shopify merchants who are tired of handing out refunds and getting nothing in return.
+            For Shopify merchants who issue Store Credit and have no real way to tell if it&apos;s
+            working.
           </p>
         </div>
         <DashboardPreview />
@@ -282,38 +280,39 @@ function Card({
 
 function ProblemSection() {
   return (
-    <section id="why-pleero" className="bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+    <section id="problem" className="scroll-mt-20 bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
-          eyebrow="You have Store Credit. Getting it to work is the hard part."
-          title="Store Credit should be simple. But right now, it&apos;s a headache."
-          intro="Most Shopify merchants hand out Store Credit after refunds and hope customers come back. There&apos;s no system, no tracking, and no way to know if it&apos;s working."
+          eyebrow="You have Store Credit. Knowing if it works is the hard part."
+          title="Store Credit shouldn't be a black box."
+          intro="Most Shopify merchants issue Store Credit — through Shopify itself, a returns app, or a loyalty tool — and then lose track of it completely. No single view. No idea what's working. No idea what's about to expire unused."
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card title="You react instead of planning">
-            You only use Store Credit after something goes wrong — a refund, a complaint, a late
-            delivery. There&apos;s no plan, just putting out fires.
+          <Card title="You don't know your redemption rate">
+            You&apos;ve issued Store Credit for months. You have no idea what percentage of it
+            customers actually use.
           </Card>
-          <Card title="You have no idea what&apos;s happening">
-            You give out credit, but you don&apos;t know if customers ever use it. Does it sit
-            there forever? Did it bring anyone back? You&apos;re guessing.
+          <Card title="Your Store Credit data is scattered">
+            Some came from a return, some from Shopify directly, some from a loyalty app, some from
+            a gift card you made by hand. None of it talks to the others.
           </Card>
-          <Card title="It&apos;s a mess to manage">
-            Want to automate Store Credit? You&apos;re stuck juggling apps, custom code, and
-            spreadsheets. There&apos;s no simple way.
+          <Card title="Money is quietly expiring">
+            Unused credit sits in customer accounts until it expires, and nobody&apos;s watching the
+            clock or reminding anyone.
           </Card>
-          <Card title="Customers forget they have it">
-            Customers get Store Credit and forget. The money sits in their account, and you never
-            see them again.
+          <Card title="You can't prove it's working">
+            When someone asks &ldquo;is Store Credit actually bringing customers back,&rdquo; you
+            don&apos;t have a number to give them.
           </Card>
         </div>
         <div className="mt-10 rounded-2xl bg-[#0B0C0E] p-6 text-white sm:p-8 lg:p-10">
           <p className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
-            Store Credit could be your best retention tool. But without the right system, it&apos;s
-            just another thing to manage.
+            Store Credit could be one of your best retention tools. Right now, it&apos;s mostly a
+            mystery.
           </p>
           <p className="mt-4 max-w-3xl leading-7 text-[#C8CED7]">
-            You have the feature. You just need the right way to use it.
+            You don&apos;t need another app to issue credit. You need one that tells you the truth
+            about the credit you already have.
           </p>
           <div className="mt-6">
             <button
@@ -321,7 +320,7 @@ function ProblemSection() {
               onClick={scrollToWaitlist}
               className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#0B0C0E] transition hover:bg-[#EEF1F5] focus:outline-none focus:ring-4 focus:ring-white/25"
             >
-              Help Us Build the Missing Layer
+              Help Us Build the Missing Report
             </button>
           </div>
         </div>
@@ -335,21 +334,20 @@ function OutcomeSection() {
     <section className="bg-[#F7F8FA] px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
-          eyebrow="Imagine Store Credit that works for you"
-          title="What if every refund brought a customer back?"
+          eyebrow="Imagine finally being able to answer the question"
+          title="What if you could see exactly what your Store Credit is doing?"
         />
         <div className="grid gap-4 md:grid-cols-3">
-          <Card title="Keep more money when refunds happen" muted>
-            Instead of sending cash out the door, offer extra Store Credit. They get more value.
-            You keep the sale.
+          <Card title="One number for the whole picture" muted>
+            See total issued, redeemed, and revenue brought back — across every tool you use to
+            issue it.
           </Card>
-          <Card title="Bring customers back on purpose" muted>
-            Use credit to reward loyal customers, celebrate milestones, or win back shoppers who
-            haven&apos;t visited in a while.
+          <Card title="Catch credit before it expires" muted>
+            Get an alert when balances are about to expire, with a ready-made list of who to remind.
           </Card>
-          <Card title="See what&apos;s actually working" muted>
-            See exactly how much credit you&apos;ve given, how much gets used, and how many
-            customers come back because of it.
+          <Card title="Finally prove the ROI" muted>
+            Walk into your next planning meeting with a real number for what Store Credit is doing
+            for the business.
           </Card>
         </div>
         <div className="relative mx-auto mt-10 max-w-3xl -rotate-1 rounded-sm bg-[#FFF9E3] p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition sm:p-12">
@@ -361,7 +359,8 @@ function OutcomeSection() {
             &ldquo;Store Credit shouldn&rsquo;t just sit in a customer account.&rdquo;
           </p>
           <p className="mt-4 font-handwritten text-balance text-xl font-semibold leading-[1.4] text-[#2D7A4F] sm:text-3xl">
-            It should <span className="text-[#0B0C0E]">help create</span> the next purchase.
+            It should <span className="text-[#0B0C0E]">prove the next purchase</span> — or tell you
+            exactly why it didn&apos;t.
           </p>
         </div>
       </div>
@@ -369,60 +368,80 @@ function OutcomeSection() {
   );
 }
 
-function VisionSection() {
+function VisionSection({ onGetReport }: { onGetReport: () => void }) {
   const cards = [
-    [
-      "Refund Recovery",
-      "Turn refunds into repeat sales.",
-      "When a customer asks for a refund, give them a choice: cash back or bonus credit. Most pick the credit — and come back to spend it.",
-    ],
-    [
-      "Credit Intelligence",
-      "Track every dollar of credit.",
-      "Know how much credit you issued, how much got spent, and who came back to shop again.",
-    ],
-    [
-      "Smart Automation",
-      "Automate offers without the work.",
-      "Set up automatic offers for refunds, repeat customers, birthdays, or VIPs. No manual work.",
-    ],
-    [
-      "Redemption Journeys",
-      "Remind customers to come back.",
-      "Send automatic nudges when customers have unused credit. A simple reminder can turn forgotten credit into a new order.",
-    ],
+    {
+      label: "Store Credit ROI Dashboard",
+      title: "One number: how much revenue Store Credit actually brought back.",
+      copy: "See what's issued, what's redeemed, and what it's worth — in one place, updated automatically.",
+      comingSoon: false,
+    },
+    {
+      label: "Expiry & Liability Tracking",
+      title: "See what's about to go to waste — before it does.",
+      copy: "Get a clear list of balances nearing expiration, so nothing quietly disappears.",
+      comingSoon: false,
+    },
+    {
+      label: "Works With What You Already Use",
+      title: "No need to switch tools.",
+      copy: "Pulls data from Shopify native Store Credit, Loop, AfterShip, ReturnGO, Rise.ai, or manual gift-card codes into one reconciled view.",
+      comingSoon: false,
+    },
+    {
+      label: "Win-Back Nudges",
+      title: "Turn unused credit into a reason to come back.",
+      copy: "Automatic reminders for customers sitting on balances they've forgotten about.",
+      comingSoon: true,
+    },
   ];
 
   return (
-    <section id="building" className="bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+    <section
+      id="what-youll-see"
+      className="scroll-mt-20 bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
             <Eyebrow>What we&apos;re building</Eyebrow>
             <h2 className="text-balance text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl">
-              Simple tools to make Store Credit work harder
+              The report your Store Credit app doesn&apos;t give you
             </h2>
             <p className="mt-5 text-lg leading-8 text-[#4E5968]">
-              We&apos;re building tools that help you use Store Credit automatically, see clear
-              results, and stop guessing.
+              We&apos;re not building another way to issue Store Credit — you probably already have
+              one. We&apos;re building the layer that tells you whether it&apos;s working, no matter
+              which tool you use to issue it.
             </p>
             <p className="mt-5 rounded-xl border border-[#2D7A4F]/20 bg-[#E8F5EE] p-5 leading-7 text-[#244434]">
-              We&apos;re talking to Shopify merchants like you to build what actually matters. Join
-              the waitlist to get early access and help shape what we build.
+              We&apos;re talking to Shopify merchants before building anything else. Join early
+              access and help us decide exactly what ships first.
             </p>
             <div className="mt-6">
-              <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
+              <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>
             </div>
           </div>
           <div>
             <div className="grid gap-4 md:grid-cols-2">
-              {cards.map(([label, title, copy]) => (
-                <div key={label} className="rounded-xl border border-black/10 bg-[#F7F8FA] p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#2D7A4F]">
-                    {label}
-                  </p>
-                  <h3 className="mt-3 text-xl font-bold tracking-tight text-[#0B0C0E]">{title}</h3>
-                  <p className="mt-3 leading-7 text-[#5D6673]">{copy}</p>
+              {cards.map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-xl border border-black/10 bg-[#F7F8FA] p-6"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#2D7A4F]">
+                      {card.label}
+                    </p>
+                    {card.comingSoon && (
+                      <span className="rounded-full bg-[#E8F5EE] px-2.5 py-0.5 text-xs font-bold text-[#2D7A4F]">
+                        Coming soon
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-3 text-xl font-bold tracking-tight text-[#0B0C0E]">
+                    {card.title}
+                  </h3>
+                  <p className="mt-3 leading-7 text-[#5D6673]">{card.copy}</p>
                 </div>
               ))}
             </div>
@@ -446,18 +465,18 @@ function StepsSection() {
           {[
             [
               "01",
-              "Pick when to offer credit",
-              "Set up offers for refunds, repeat purchases, VIP moments, or any time you choose.",
+              "Connect your store",
+              "Install Pleero. It reads your existing Store Credit activity — no matter which app issues it.",
             ],
             [
               "02",
-              "Give them a reason to come back",
-              "Customers see a simple offer — bonus credit instead of a refund. Clear choice, easy to understand.",
+              "See what's really happening",
+              "Get a clear picture: how much is issued, how much is redeemed, how much revenue it's brought back, and how much is about to expire.",
             ],
             [
               "03",
-              "See the results",
-              "Track how much credit gets used, how many customers return, and how much revenue you kept.",
+              "Act before credit goes to waste",
+              "Get alerts and win-back nudges for customers sitting on unused balances, before that money disappears for good.",
             ],
           ].map(([step, title, copy]) => (
             <div key={step} className="rounded-xl border border-black/10 bg-white p-6">
@@ -557,12 +576,18 @@ function MultiChoiceGroup({
   );
 }
 
-function WaitlistForm() {
+function WaitlistForm({ prefillEmail = "" }: { prefillEmail?: string }) {
   const [form, setForm] = useState<WaitlistData>(initialForm);
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [error, setError] = useState("");
   const progress = useMemo(() => Math.round(((step + 1) / 6) * 100), [step]);
+
+  useEffect(() => {
+    if (prefillEmail && !form.email) {
+      setForm((current) => ({ ...current, email: prefillEmail }));
+    }
+  }, [prefillEmail, form.email]);
 
   function update<K extends keyof WaitlistData>(key: K, value: WaitlistData[K]) {
     if (step === 0 && !form.email && !form.storeUrl) track("waitlist_form_started");
@@ -572,7 +597,7 @@ function WaitlistForm() {
   function stepIsValid() {
     if (step === 0) return /\S+@\S+\.\S+/.test(form.email) && form.storeUrl.trim().length > 3;
     if (step === 1) return Boolean(form.businessCategory && form.monthlyOrders);
-    if (step === 2) return form.currentUseCases.length > 0;
+    if (step === 2) return form.creditSources.length > 0;
     if (step === 3) return Boolean(form.biggestPain);
     if (step === 4) return form.openResponse.trim().length >= 10;
     return Boolean(form.valuableCapability && form.interviewWillingness);
@@ -701,10 +726,10 @@ function WaitlistForm() {
 
         {step === 2 && (
           <MultiChoiceGroup
-            label="How do you currently use Store Credit?"
-            options={currentUseCases}
-            values={form.currentUseCases}
-            onChange={(values) => update("currentUseCases", values)}
+            label="How is Store Credit currently issued in your store?"
+            options={creditSourceOptions}
+            values={form.creditSources}
+            onChange={(values) => update("creditSources", values)}
           />
         )}
 
@@ -783,7 +808,7 @@ function WaitlistForm() {
   );
 }
 
-function WaitlistSection() {
+function WaitlistSection({ prefillEmail }: { prefillEmail?: string }) {
   return (
     <section
       id="early-access"
@@ -793,14 +818,15 @@ function WaitlistSection() {
         <div className="text-white">
           <Eyebrow>Early Access</Eyebrow>
           <h2 className="text-balance text-3xl font-black tracking-tight sm:text-5xl">
-            Help us build something you&apos;ll actually use.
+            Help us build the report you actually need.
           </h2>
           <p className="mt-5 text-lg leading-8 text-[#C8CED7]">
-            We&apos;re looking for Shopify merchants who use Store Credit — or want to. Tell us
-            how you handle things today and what you wish was easier.
+            We&apos;re talking to Shopify merchants who already issue Store Credit — through Shopify
+            native, Loop, AfterShip, ReturnGO, Rise.ai, or manually — before we build anything else.
+            Tell us what you wish you could see.
           </p>
         </div>
-        <WaitlistForm />
+        <WaitlistForm prefillEmail={prefillEmail} />
       </div>
     </section>
   );
@@ -830,27 +856,30 @@ function FounderSection() {
               could offer them bonus Store Credit instead? You keep the sale. They get more value.
             </p>
             <p>
-              But the more I talked to merchants, the more I realized the problem was bigger. Store
-              Credit was everywhere, but nobody had a simple way to use it well.
+              But the more I talked to merchants, the more I realized that wasn&apos;t actually the
+              problem. Most of them already had some way to issue Store Credit — Shopify&apos;s own
+              tools, a returns app, a loyalty app, or just a pile of gift-card codes.
             </p>
             <p>
-              Merchants could issue credit, but automating it, tracking it, and turning it into
-              actual sales was a mess.
+              What none of them had was a way to know if it was working. How much gets redeemed. How
+              much just sits there. How much is about to quietly expire. Nobody could give me a
+              straight answer, and nobody had a tool that could either.
             </p>
-            <p>That&apos;s what I&apos;m working on with Pleero.</p>
+            <p>
+              That&apos;s what I&apos;m building with Pleero — not another way to issue credit, but
+              the report that tells you the truth about the credit you&apos;ve already got.
+            </p>
             <p>
               I&apos;m talking to Shopify merchants before building anything big, because I want to
               build what people actually need — not what I <em>think</em> they need.
             </p>
             <p>
-              If Store Credit is something you deal with every day, I&apos;d{" "}
+              If you issue Store Credit and have no real idea whether it&apos;s working, I&apos;d{" "}
               <span className="text-[#2D7A4F]">love to hear your story</span>.
             </p>
           </div>
           <div className="mt-6 border-t border-black/10 pt-4 text-right">
-            <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">
-              Kamalesh
-            </p>
+            <p className="font-handwritten text-lg font-semibold text-[#0B0C0E]">Kamalesh</p>
           </div>
         </div>
       </div>
@@ -858,24 +887,24 @@ function FounderSection() {
   );
 }
 
-function FinalCta() {
+function FinalCta({ onGetReport }: { onGetReport: () => void }) {
   return (
     <section className="bg-[#F7F8FA] px-4 py-16 text-center sm:px-6 sm:py-24 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <h2 className="text-balance text-3xl font-black tracking-tight text-[#0B0C0E] sm:text-5xl">
           You already have Store Credit in Shopify.
           <br />
-          Let&apos;s make it actually work for you.
+          Let&apos;s find out if it&apos;s actually working.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#4E5968]">
-          Join the early access waitlist and help us build a better way to turn refunds into repeat
-          sales.
+          Join early access and help us build the report that finally tells you the truth about your
+          Store Credit — no matter what issues it.
         </p>
         <div className="mt-8">
-          <PrimaryButton>Join the Early Access Waitlist</PrimaryButton>
+          <PrimaryButton onClick={onGetReport}>Get My Free Report</PrimaryButton>
         </div>
         <p className="mt-4 text-sm font-medium text-[#687281]">
-          Early access. Product research. No spam.
+          Early access. Real product research. No spam.
         </p>
       </div>
     </section>
@@ -892,7 +921,7 @@ function Footer() {
             <span className="text-lg font-bold">Pleero</span>
           </div>
           <p className="mt-3 max-w-sm text-sm leading-6 text-[#8A9099]">
-            Store Credit Intelligence for Shopify merchants.
+            Store Credit, finally visible — for Shopify merchants.
           </p>
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
@@ -918,18 +947,37 @@ function Footer() {
 }
 
 export default function LandingPage() {
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportedEmail, setReportedEmail] = useState("");
+
+  function openReport() {
+    track("report_cta_clicked");
+    setReportOpen(true);
+  }
+
+  function openWaitlistFromReport(email: string) {
+    setReportedEmail(email);
+    setReportOpen(false);
+    scrollToWaitlist();
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F8FA]">
-      <Nav />
-      <Hero />
+      <Nav onGetReport={openReport} />
+      <Hero onGetReport={openReport} />
       <ProblemSection />
       <OutcomeSection />
-      <VisionSection />
+      <VisionSection onGetReport={openReport} />
       <StepsSection />
-      <WaitlistSection />
+      <WaitlistSection prefillEmail={reportedEmail} />
       <FounderSection />
-      <FinalCta />
+      <FinalCta onGetReport={openReport} />
       <Footer />
+      <StoreCreditReport
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onContinueToWaitlist={openWaitlistFromReport}
+      />
     </div>
   );
 }

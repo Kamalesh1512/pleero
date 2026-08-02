@@ -15,10 +15,13 @@ def valid_waitlist_payload() -> dict[str, object]:
         "storeUrl": "https://example-store.myshopify.com/",
         "businessCategory": "Apparel / Fashion",
         "monthlyOrders": "100-500",
-        "currentUseCases": ["Refunds or returns", "Customer service / goodwill"],
-        "biggestPain": "Understanding whether Store Credit gets redeemed",
+        "creditSources": [
+            "Shopify's native Store Credit",
+            "A returns app (Loop, AfterShip, ReturnGO, etc.)",
+        ],
+        "biggestPain": "I don't know what % of it actually gets redeemed",
         "openResponse": "I want to know whether credit actually drives repeat purchases.",
-        "valuableCapability": "Store Credit analytics and reporting",
+        "valuableCapability": "A single dashboard showing redemption rate and revenue brought back",
         "interviewWillingness": "Maybe",
     }
 
@@ -40,9 +43,9 @@ class TestWaitlistSubmission:
         assert submission.email == "merchant@example.com"
         assert submission.store_url == "example-store.myshopify.com"
         assert submission.business_category == "Apparel / Fashion"
-        assert submission.current_use_cases == [
-            "Refunds or returns",
-            "Customer service / goodwill",
+        assert submission.credit_sources == [
+            "Shopify's native Store Credit",
+            "A returns app (Loop, AfterShip, ReturnGO, etc.)",
         ]
 
     async def test_duplicate_email_or_store_returns_conflict(self, client):

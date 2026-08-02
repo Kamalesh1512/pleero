@@ -43,7 +43,7 @@ class WaitlistSubmission(Base, TimestampMixin):
         nullable=False,
     )
 
-    current_use_cases: Mapped[list[str]] = mapped_column(
+    credit_sources: Mapped[list[str]] = mapped_column(
         JSON,
         nullable=False,
     )
