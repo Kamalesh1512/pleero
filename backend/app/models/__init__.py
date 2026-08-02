@@ -7,6 +7,7 @@ from app.models.base import Base, TimestampMixin
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.models.offer import Offer, OfferStatus
 from app.models.offer_event import OfferEvent, EventType
+from app.models.report_request import ReportRequest
 from app.models.waitlist_submission import WaitlistSubmission
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "OfferStatus",
     "OfferEvent",
     "EventType",
+    "ReportRequest",
     "WaitlistSubmission",
 ]

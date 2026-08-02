@@ -17,7 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.rate_limit import limiter
-from app.routers import auth, billing, dashboard, offers, waitlist, webhooks
+from app.routers import auth, billing, dashboard, offers, report, waitlist, webhooks
 from app.routers.auth import api_router as auth_api_router
 
 # Configure logging on import
@@ -99,6 +99,7 @@ app.include_router(offers.router)
 app.include_router(dashboard.router)
 app.include_router(billing.router)
 app.include_router(waitlist.router)
+app.include_router(report.router)
 
 
 @app.get("/health")

@@ -54,7 +54,7 @@ async def create_waitlist_submission(
         store_url=payload.store_url,
         business_category=payload.business_category,
         monthly_orders=payload.monthly_orders,
-        current_use_cases=payload.current_use_cases,
+        credit_sources=payload.credit_sources,
         biggest_pain=payload.biggest_pain,
         open_response=payload.open_response,
         valuable_capability=payload.valuable_capability,
