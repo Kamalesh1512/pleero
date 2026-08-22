@@ -124,3 +124,57 @@ class ShopRedactPayload(BaseModel):
 
     shop_id: int
     shop_domain: str
+
+
+# ── Store Credit account webhooks ──────────────────────────────────────────────
+# Shopify 2026-04 sends these when Store Credit is credited or debited.
+# We observe them for analytics — the store is the authoritative source of truth
+# for balances; Pleero stores only the event stream for derived intelligence.
+
+
+class StoreCreditAmount(BaseModel):
+    """Monetary amount within a Store Credit transaction."""
+
+    amount: str | float
+    currency_code: str = "USD"
+
+
+class StoreCreditCustomer(BaseModel):
+    """Customer block inside a Store Credit payload."""
+
+    id: int
+    email: str | None = None
+
+
+class StoreCreditBalance(BaseModel):
+    """Credit balance block at the time of transaction."""
+
+    customer: StoreCreditCustomer | None = None
+
+
+class StoreCreditTransactionDetail(BaseModel):
+    """The transaction detail inside a Store Credit webhook."""
+
+    id: str
+    credit_balance: StoreCreditBalance | None = None
+    amount: StoreCreditAmount | None = None
+    balance: StoreCreditAmount | None = None
+    created_at: str | None = None
+
+
+class StoreCreditDebitPayload(BaseModel):
+    """store_credit_accounts/debit webhook payload."""
+
+    store_credit_account_debit: dict | None = None
+    customer_credit_balance_transaction: StoreCreditTransactionDetail | None = None
+    shop_id: int | None = None
+    shop_domain: str | None = None
+
+
+class StoreCreditCreditPayload(BaseModel):
+    """store_credit_accounts/credit webhook payload."""
+
+    store_credit_account_credit: dict | None = None
+    customer_credit_balance_transaction: StoreCreditTransactionDetail | None = None
+    shop_id: int | None = None
+    shop_domain: str | None = None

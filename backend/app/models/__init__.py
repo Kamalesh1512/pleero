@@ -9,6 +9,16 @@ from app.models.offer import Offer, OfferStatus
 from app.models.offer_event import OfferEvent, EventType
 from app.models.report_request import ReportRequest
 from app.models.waitlist_submission import WaitlistSubmission
+from app.models.credit_transaction import (
+    CreditTransaction,
+    TransactionType,
+    TransactionSource,
+)
+from app.models.automation import (
+    AutomationConfig,
+    AutomationWorkflow,
+    RedemptionReminder,
+)
 
 __all__ = [
     "Base",
@@ -21,4 +31,10 @@ __all__ = [
     "EventType",
     "ReportRequest",
     "WaitlistSubmission",
+    "CreditTransaction",
+    "TransactionType",
+    "TransactionSource",
+    "AutomationConfig",
+    "AutomationWorkflow",
+    "RedemptionReminder",
 ]

@@ -165,6 +165,170 @@ def build_offer_email_html(
     return html
 
 
+def build_manual_review_alert_email_html(
+    merchant_name: str,
+    customer_email: str,
+    order_number: str,
+    refund_amount_cents: int,
+    credit_amount_cents: int,
+    currency_code: str,
+    dashboard_url: str,
+) -> str:
+    """
+    Build the merchant-facing alert email for an offer stuck in MANUAL_REVIEW.
+
+    Sent when a customer accepted a Refund Recovery offer but Pleero could not
+    safely issue store credit automatically (e.g. the underlying cash refund
+    had already paid out). The merchant must resolve this directly in Shopify
+    admin — Pleero never fakes success or silently double-pays.
+    """
+    refund_amount = format_currency(refund_amount_cents, currency_code)
+    credit_amount = format_currency(credit_amount_cents, currency_code)
+
+    safe_merchant_name = escape(merchant_name)
+    safe_customer_email = escape(customer_email)
+    safe_order_number = escape(order_number)
+    safe_dashboard_url = escape(dashboard_url)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action needed: store credit could not be issued automatically</title>
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background-color:#f5f5f5;">
+    <div style="max-width:600px;margin:0 auto;background-color:#ffffff;padding:40px 20px;">
+        <h1 style="font-size:22px;font-weight:600;color:#111111;margin:0 0 16px 0;">
+            Action needed on order {safe_order_number}
+        </h1>
+
+        <p style="font-size:15px;color:#333333;line-height:1.5;margin:0 0 20px 0;">
+            {safe_customer_email} accepted a {credit_amount} store credit offer for their
+            {refund_amount} refund, but Pleero could not issue the credit automatically —
+            most likely because the original cash refund had already been paid out.
+        </p>
+
+        <p style="font-size:15px;color:#333333;line-height:1.5;margin:0 0 20px 0;">
+            To avoid double-paying the customer, no store credit was issued. Please review
+            this order in Shopify admin and resolve it manually (e.g. issue store credit
+            yourself if the cash refund has not gone out, or contact the customer if it has).
+        </p>
+
+        <div style="margin-bottom: 24px;">
+            <a href="{safe_dashboard_url}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:15px;font-weight:600;">
+                View in Pleero dashboard
+            </a>
+        </div>
+
+        <div style="border-top:1px solid #e5e5e5;padding-top:20px;">
+            <p style="font-size:12px;color:#999999;margin:0;">
+                Sent by Pleero on behalf of {safe_merchant_name}.
+            </p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+async def send_manual_review_alert_email(
+    db: AsyncSession,
+    offer_id: UUID,
+) -> bool:
+    """
+    Notify the merchant that an accepted offer needs manual review.
+
+    Note: Wrapped in try/except to never crash the caller.
+    """
+    try:
+        if not settings.RESEND_API_KEY:
+            logger.warning(
+                "resend_not_configured",
+                offer_id=str(offer_id),
+                message="RESEND_API_KEY not set - manual review alert would be sent here",
+            )
+            return True
+
+        result = await db.execute(select(Offer).where(Offer.id == offer_id))
+        offer = result.scalar_one_or_none()
+        if not offer:
+            logger.error(
+                "send_manual_review_alert_failed",
+                reason="offer_not_found",
+                offer_id=str(offer_id),
+            )
+            return False
+
+        result = await db.execute(
+            select(Merchant).where(Merchant.id == offer.merchant_id)
+        )
+        merchant: Merchant | None = result.scalar_one_or_none()
+        if not merchant:
+            logger.error(
+                "send_manual_review_alert_failed",
+                reason="merchant_not_found",
+                offer_id=str(offer_id),
+            )
+            return False
+
+        merchant_name = merchant.shop_name or (
+            merchant.shop_domain.split(".")[0].replace("-", " ").title()
+        )
+        dashboard_url = f"{settings.FRONTEND_URL}/offers"
+
+        html_content = build_manual_review_alert_email_html(
+            merchant_name=merchant_name,
+            customer_email=offer.customer_email,
+            order_number=offer.order_number or offer.shopify_order_id,
+            refund_amount_cents=offer.refund_amount_cents,
+            credit_amount_cents=offer.credit_amount_cents,
+            currency_code=offer.currency_code,
+            dashboard_url=dashboard_url,
+        )
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": "Pleero Alerts <alerts@pleero.app>",
+                    "to": [merchant.merchant_email],
+                    "subject": f"Action needed: store credit could not be issued (order {offer.order_number or offer.shopify_order_id})",
+                    "html": html_content,
+                },
+                timeout=10.0,
+            )
+            response.raise_for_status()
+
+        logger.info(
+            "manual_review_alert_sent",
+            offer_id=str(offer.id),
+            merchant_id=str(merchant.id),
+        )
+        return True
+
+    except httpx.HTTPError as e:
+        logger.error(
+            "send_manual_review_alert_http_error",
+            offer_id=str(offer_id),
+            error=str(e),
+            exc_info=True,
+        )
+        return False
+
+    except Exception as e:
+        logger.error(
+            "send_manual_review_alert_unexpected_error",
+            offer_id=str(offer_id),
+            error=str(e),
+            exc_info=True,
+        )
+        return False
+
+
 async def send_offer_email(
     db: AsyncSession,
     offer_id: UUID,
@@ -267,7 +431,7 @@ async def send_offer_email(
             event = OfferEvent(
                 offer_id=offer.id,
                 event_type=EventType.SENT,
-                metadata={
+                offer_event_metadata={
                     "recipient": offer.customer_email,
                     "resend_response": response.json(),
                 },

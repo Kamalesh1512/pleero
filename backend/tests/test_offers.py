@@ -8,7 +8,8 @@ from unittest.mock import patch, AsyncMock
 from datetime import datetime, UTC
 
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.models.offer import Offer, OfferStatus
+from app.models.offer import Offer, OfferStatus, RefundStatus
+from app.services.shopify import RefundActionOutcome
 
 
 @pytest.mark.asyncio
@@ -135,16 +136,11 @@ class TestAcceptOffer:
 
         # Mock Shopify API calls
         with patch(
-            "app.routers.offers.issue_store_credit",
+            "app.routers.offers.refund_to_store_credit",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value=RefundActionOutcome.CREDIT_REFUND_CREATED,
         ):
-            with patch(
-                "app.routers.offers.cancel_refund",
-                new_callable=AsyncMock,
-                return_value=True,
-            ):
-                response = await client.post(f"/offers/{offer.offer_token}/accept")
+            response = await client.post(f"/offers/{offer.offer_token}/accept")
 
         assert response.status_code == 200
         data = response.json()
@@ -155,6 +151,7 @@ class TestAcceptOffer:
         await db_session.refresh(offer)
         assert offer.status == OfferStatus.ACCEPTED
         assert offer.accepted_at is not None
+        assert offer.refund_status == RefundStatus.CREDIT_REFUND_CREATED
 
     async def test_accept_offer_twice_is_idempotent(self, client, db_session):
         """Test that accepting same offer twice is idempotent."""
@@ -257,18 +254,28 @@ class TestAcceptOffer:
         await db_session.commit()
 
         # Mock credit issuance failure
-        with patch(
-            "app.routers.offers.issue_store_credit",
-            new_callable=AsyncMock,
-            return_value=False,
+        with (
+            patch(
+                "app.routers.offers.refund_to_store_credit",
+                new_callable=AsyncMock,
+                return_value=RefundActionOutcome.MANUAL_REVIEW,
+            ),
+            patch(
+                "app.tasks.email_tasks.send_manual_review_alert_email_task.delay"
+            ) as mock_alert_delay,
         ):
             response = await client.post(f"/offers/{offer.offer_token}/accept")
 
         assert response.status_code == 500
+        assert "notified" in response.json()["detail"].lower()
 
         # Verify offer status NOT updated
         await db_session.refresh(offer)
         assert offer.status == OfferStatus.PENDING
+        assert offer.refund_status == RefundStatus.MANUAL_REVIEW
+
+        # Merchant alert was enqueued off the request path
+        mock_alert_delay.assert_called_once_with(str(offer.id))
 
 
 @pytest.mark.asyncio

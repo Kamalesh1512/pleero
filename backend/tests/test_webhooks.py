@@ -7,7 +7,7 @@ import pytest
 import hmac
 import hashlib
 import base64
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, MagicMock
 
 from app.models.merchant import Merchant, SubscriptionStatus
 from app.utils.shopify_webhooks import (
@@ -227,8 +227,11 @@ class TestWebhookEndpoint:
 
         # Mock HMAC verification
         with patch("app.routers.webhooks.verify_webhook_hmac", return_value=True):
-            # Mock email sending
-            with patch("app.services.email.send_offer_email", new_callable=AsyncMock):
+            # Mock email enqueue (Celery would otherwise need a live Redis broker)
+            with patch(
+                "app.tasks.email_tasks.send_offer_email_task",
+                new_callable=MagicMock,
+            ):
                 response = await client.post(
                     "/webhooks/refunds/create",
                     json=mock_refund_webhook_payload,

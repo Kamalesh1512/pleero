@@ -72,6 +72,85 @@ export interface DashboardMetrics {
   offers_declined: number;
   acceptance_rate: number;
   revenue_retained_cents: number;
+  offers_needing_review: number;
+}
+
+// ─── Analytics types ──────────────────────────────────────────────────────────
+
+export interface StoreCreditOverview {
+  credit_issued_cents: number;
+  credit_issued_attribution: string;
+  credit_redeemed_cents: number;
+  credit_redeemed_attribution: string;
+  outstanding_credit_cents: number;
+  outstanding_credit_attribution: string;
+  redemption_rate: number;
+  redemption_rate_attribution: string;
+  avg_days_to_redemption: number | null;
+  avg_days_to_redemption_attribution: string;
+  customers_with_active_credit: number;
+  customers_with_active_credit_attribution: string;
+  revenue_influenced_cents: number;
+  revenue_influenced_attribution: string;
+  period_label: string;
+}
+
+export interface TimeSeriesPoint {
+  date: string;
+  credit_issued_cents: number;
+  credit_redeemed_cents: number;
+  offers_sent: number;
+  offers_accepted: number;
+}
+
+export interface TimeSeriesResponse {
+  points: TimeSeriesPoint[];
+  period_days: number;
+}
+
+export interface CreditSourceItem {
+  source: string;
+  label: string;
+  issued_cents: number;
+  count: number;
+  percentage: number;
+}
+
+export interface CreditSourceBreakdown {
+  sources: CreditSourceItem[];
+}
+
+export interface RefundRecoveryFunnel {
+  eligible_refund_value_cents: number;
+  offers_sent: number;
+  offers_viewed: number;
+  offers_accepted: number;
+  offers_declined: number;
+  acceptance_rate: number;
+  refund_value_retained_cents: number;
+  bonus_credit_issued_cents: number;
+  total_credit_issued_cents: number;
+  credit_redeemed_cents: number;
+  credit_redeemed_attribution: string;
+}
+
+export interface AutomationWorkflowPerformance {
+  workflow: string;
+  label: string;
+  executions: number;
+  executions_attribution: string;
+  credit_issued_cents: number;
+  credit_issued_attribution: string;
+  customers_reached: number;
+  redeemed_customers: number | null;
+  redemption_rate: number | null;
+  redemption_rate_attribution: string;
+  notes: string | null;
+}
+
+export interface AutomationPerformance {
+  workflows: AutomationWorkflowPerformance[];
+  period_days: number;
 }
 
 export interface Merchant {
@@ -104,6 +183,7 @@ export interface MerchantOffer {
   refund_amount_cents: number;
   credit_amount_cents: number;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  refund_status: 'PENDING' | 'CREDIT_REFUND_CREATED' | 'MANUAL_REVIEW';
   revenue_retained_cents: number | null;
   created_at: string;
 }
@@ -164,8 +244,9 @@ export async function updateMerchantSettings(data: MerchantUpdate): Promise<Merc
   return res.json();
 }
 
-export async function getMerchantOffers(): Promise<MerchantOffer[]> {
-  const res = await fetchWithAuth('/api/offers');
+export async function getMerchantOffers(options?: { needsReview?: boolean }): Promise<MerchantOffer[]> {
+  const query = options?.needsReview ? '?needs_review=true' : '';
+  const res = await fetchWithAuth(`/api/offers${query}`);
   if (!res.ok) throwApiError(res, 'Failed to fetch offers');
   const data = await res.json();
   return data.offers ?? [];
@@ -176,6 +257,166 @@ export async function getShopLogo(): Promise<string | null> {
   if (!res.ok) return null;
   const data = await res.json();
   return data.logo_url ?? null;
+}
+
+// ─── Analytics API ─────────────────────────────────────────────────────────────
+
+export async function getStoreCreditOverview(
+  periodDays: number = 30
+): Promise<StoreCreditOverview> {
+  const res = await fetchWithAuth(`/api/analytics/overview?period_days=${periodDays}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch analytics overview');
+  return res.json();
+}
+
+export async function getAnalyticsTimeSeries(
+  periodDays: number = 30
+): Promise<TimeSeriesResponse> {
+  const res = await fetchWithAuth(`/api/analytics/timeseries?period_days=${periodDays}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch time series');
+  return res.json();
+}
+
+export async function getCreditSources(
+  periodDays: number = 30
+): Promise<CreditSourceBreakdown> {
+  const res = await fetchWithAuth(`/api/analytics/sources?period_days=${periodDays}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch credit sources');
+  return res.json();
+}
+
+export async function getRefundFunnel(
+  periodDays: number = 30
+): Promise<RefundRecoveryFunnel> {
+  const res = await fetchWithAuth(`/api/analytics/funnel?period_days=${periodDays}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch funnel');
+  return res.json();
+}
+
+export async function getAutomationPerformance(
+  periodDays: number = 30
+): Promise<AutomationPerformance> {
+  const res = await fetchWithAuth(`/api/analytics/automation?period_days=${periodDays}`);
+  if (!res.ok) throwApiError(res, 'Failed to fetch automation performance');
+  return res.json();
+}
+
+export async function downloadCsvExport(): Promise<string> {
+  const res = await fetchWithAuth('/api/analytics/export');
+  if (!res.ok) throwApiError(res, 'Failed to export CSV');
+  return res.text();
+}
+
+// ─── Automation API ────────────────────────────────────────────────────────────
+
+export interface AutomationWorkflowConfig {
+  workflow: string;
+  enabled: boolean;
+  min_days_before_action: number;
+  max_actions_per_customer: number;
+}
+
+export interface AutomationSettings {
+  workflows: AutomationWorkflowConfig[];
+}
+
+export interface GoodwillRequest {
+  customer_email: string;
+  customer_first_name?: string;
+  amount_cents: number;
+  currency?: string;
+  note?: string;
+}
+
+export interface GoodwillResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface WinbackCandidate {
+  customer_email: string;
+  customer_first_name: string;
+  customer_shopify_id: string | null;
+  last_activity: string | null;
+  days_since_last_activity: number | null;
+}
+
+export interface AutomationNames {
+  [key: string]: string;
+}
+export const AUTOMATION_WORKFLOW_LABELS: AutomationNames = {
+  refund_recovery: 'Refund Recovery',
+  goodwill: 'Goodwill',
+  winback: 'Win-back',
+  redemption_reminder: 'Redemption Reminder',
+};
+export const AUTOMATION_WORKFLOW_DESCRIPTIONS: AutomationNames = {
+  refund_recovery: 'Automatically send Store Credit offers when customers request refunds',
+  goodwill: 'Manually issue Store Credit to customers',
+  winback: 'Identify inactive customers for re-engagement',
+  redemption_reminder: 'Send reminders about unredeemed Store Credit',
+};
+
+export async function getAutomationSettings(): Promise<AutomationSettings> {
+  const res = await fetchWithAuth('/api/automation/settings');
+  if (!res.ok) throwApiError(res, 'Failed to fetch automation settings');
+  return res.json();
+}
+
+export async function updateAutomationWorkflow(
+  workflow: string,
+  data: Partial<AutomationWorkflowConfig>,
+): Promise<AutomationWorkflowConfig> {
+  const res = await fetchWithAuth(`/api/automation/settings/${workflow}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throwApiError(res, 'Failed to update workflow settings');
+  return res.json();
+}
+
+export async function issueGoodwillCredit(data: GoodwillRequest): Promise<GoodwillResponse> {
+  const res = await fetchWithAuth('/api/automation/goodwill', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throwApiError(res, 'Failed to issue goodwill credit');
+  return res.json();
+}
+
+export async function getWinbackCandidates(): Promise<{ candidates: WinbackCandidate[]; count: number }> {
+  const res = await fetchWithAuth('/api/automation/winback');
+  if (!res.ok) throwApiError(res, 'Failed to fetch winback candidates');
+  return res.json();
+}
+
+export interface WinbackIssueRequest {
+  customer_email: string;
+  customer_first_name?: string;
+  customer_shopify_id?: string | null;
+  amount_cents: number;
+  currency?: string;
+  note?: string;
+}
+
+export interface WinbackIssueResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function issueWinbackCredit(data: WinbackIssueRequest): Promise<WinbackIssueResponse> {
+  const res = await fetchWithAuth('/api/automation/winback/issue', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throwApiError(res, 'Failed to issue win-back credit');
+  return res.json();
+}
+
+export async function triggerReminderSweep(): Promise<{ reminders_sent: number }> {
+  const res = await fetchWithAuth('/api/automation/reminders/trigger', { method: 'POST' });
+  if (!res.ok) throwApiError(res, 'Failed to trigger reminder sweep');
+  return res.json();
 }
 
 export async function activateBilling(): Promise<{ confirmation_url: string }> {

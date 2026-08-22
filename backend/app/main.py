@@ -16,13 +16,30 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
+from app.core.middleware import RequestIDMiddleware
 from app.core.rate_limit import limiter
-from app.routers import auth, billing, dashboard, offers, report, waitlist, webhooks
+from app.core.sentry import init_sentry
+from app.routers import (
+    auth,
+    billing,
+    dashboard,
+    offers,
+    report,
+    waitlist,
+    webhooks,
+    analytics,
+    automation,
+)
 from app.routers.auth import api_router as auth_api_router
 
 # Configure logging on import
 configure_logging()
 logger = get_logger(__name__)
+
+# Sentry error monitoring — wired on import so unhandled exceptions during
+# startup are also captured. See app.core.sentry: the Celery worker/beat
+# processes initialize it separately since they never import this module.
+init_sentry()
 
 
 @asynccontextmanager
@@ -91,6 +108,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request-ID correlation for all log lines (added last so it wraps everything).
+app.add_middleware(RequestIDMiddleware)
+
 # Register routers
 app.include_router(auth.router)  # /auth/install, /auth/callback
 app.include_router(auth_api_router)  # /api/auth/me, /api/auth/logout
@@ -98,6 +118,8 @@ app.include_router(webhooks.router)
 app.include_router(offers.router)
 app.include_router(dashboard.router)
 app.include_router(billing.router)
+app.include_router(analytics.router)
+app.include_router(automation.router)
 app.include_router(waitlist.router)
 app.include_router(report.router)
 

@@ -1,11 +1,31 @@
 'use client';
 
 import { Page, Card, Layout, Text, BlockStack, Badge, DataTable, Banner, Spinner } from '@shopify/polaris';
-import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import AppFrame from '@/components/AppFrame';
 import { getMerchantOffers, formatCurrency, ApiError, type MerchantOffer } from '@/lib/api';
 
 export default function OffersPage() {
+  return (
+    <Suspense fallback={
+      <AppFrame>
+        <Page title="Offers">
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner accessibilityLabel="Loading offers" size="large" />
+          </div>
+        </Page>
+      </AppFrame>
+    }>
+      <OffersPageContent />
+    </Suspense>
+  );
+}
+
+function OffersPageContent() {
+  const searchParams = useSearchParams();
+  const filterNeedsReview = searchParams.get('needs_review') === 'true';
+
   const [offers, setOffers] = useState<MerchantOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +33,7 @@ export default function OffersPage() {
   const loadOffers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getMerchantOffers();
+      const data = await getMerchantOffers({ needsReview: filterNeedsReview });
       setOffers(data);
       setError(null);
     } catch (err) {
@@ -27,25 +47,30 @@ export default function OffersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterNeedsReview]);
 
   useEffect(() => { loadOffers(); }, [loadOffers]);
 
-  const getStatusBadge = (status: MerchantOffer['status']) => {
-    switch (status) {
+  const getStatusBadge = (offer: MerchantOffer) => {
+    if (offer.refund_status === 'MANUAL_REVIEW') {
+      return <Badge tone="critical">Needs review</Badge>;
+    }
+    switch (offer.status) {
       case 'ACCEPTED': return <Badge tone="success">Accepted</Badge>;
       case 'PENDING':  return <Badge tone="attention">Pending</Badge>;
       case 'DECLINED': return <Badge tone="critical">Declined</Badge>;
       case 'EXPIRED':  return <Badge>Expired</Badge>;
-      default:         return <Badge>{status}</Badge>;
+      default:         return <Badge>{offer.status}</Badge>;
     }
   };
+
+  const needsReviewCount = offers.filter(o => o.refund_status === 'MANUAL_REVIEW').length;
 
   const rows = offers.map(offer => [
     offer.order_number,
     offer.customer_email,
     formatCurrency(offer.credit_amount_cents),
-    getStatusBadge(offer.status),
+    getStatusBadge(offer),
     offer.revenue_retained_cents !== null ? formatCurrency(offer.revenue_retained_cents) : '—',
   ]);
 
@@ -81,6 +106,17 @@ export default function OffersPage() {
     <AppFrame>
       <Page title="Offers" subtitle={`${offers.length} offers sent`}>
         <Layout>
+          {needsReviewCount > 0 && (
+            <Layout.Section>
+              <Banner tone="critical" title={`${needsReviewCount} offer${needsReviewCount === 1 ? '' : 's'} need${needsReviewCount === 1 ? 's' : ''} manual review`}>
+                <Text as="p">
+                  Pleero could not automatically issue store credit for these customers — most
+                  likely because the original cash refund had already been paid out. Resolve
+                  these directly in Shopify admin.
+                </Text>
+              </Banner>
+            </Layout.Section>
+          )}
           <Layout.Section>
             <Card>
               {offers.length === 0 ? (

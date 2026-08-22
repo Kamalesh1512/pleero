@@ -7,6 +7,8 @@ Hard rule #5: Never hardcode API version - use settings.SHOPIFY_API_VERSION.
 
 from uuid import UUID
 
+from enum import StrEnum
+
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -203,50 +205,360 @@ async def issue_store_credit(
         await client.aclose()
 
 
-async def cancel_refund(
+class RefundActionOutcome(StrEnum):
+    """Result of attempting to create a native store-credit refund."""
+
+    CREDIT_REFUND_CREATED = "CREDIT_REFUND_CREATED"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
+# ─── ID helpers ──────────────────────────────────────────────────────────────
+
+
+def _numeric(gid_or_id: str | int) -> int:
+    """Extract the trailing numeric ID from a Shopify GID or numeric string."""
+    return int(str(gid_or_id).split("/")[-1])
+
+
+def _order_gid(order_id: str | int) -> str:
+    return f"gid://shopify/Order/{_numeric(order_id)}"
+
+
+def _refund_gid(refund_id: str | int) -> str:
+    return f"gid://shopify/Refund/{_numeric(refund_id)}"
+
+
+def _line_item_gid(line_item_id: str | int) -> str:
+    return f"gid://shopify/LineItem/{_numeric(line_item_id)}"
+
+
+# ─── Shopify calls ───────────────────────────────────────────────────────────
+
+
+async def _fetch_refund_line_items(
+    client: httpx.AsyncClient,
+    shop_domain: str,
+    order_id: str | int,
+    refund_id: str | int,
+) -> list[dict] | None:
+    """
+    Fetch the line items of the original refund so the store-credit refund
+    mirrors exactly what the merchant refunded.
+
+    Returns a list of refundCreate RefundLineItem inputs or None on failure.
+    """
+    url = (
+        f"https://{shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}"
+        f"/orders/{_numeric(order_id)}/refunds/{_numeric(refund_id)}.json"
+    )
+    try:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            logger.warning(
+                "refund_line_items_fetch_non_200",
+                shop=shop_domain,
+                order_id=order_id,
+                status=resp.status_code,
+            )
+            return None
+        data = resp.json().get("refund") or {}
+        items: list[dict] = []
+        for rli in data.get("refund_line_items", []):
+            lid = rli.get("line_item_id")
+            qty = rli.get("quantity")
+            if lid and qty:
+                items.append({"lineItemId": _line_item_gid(lid), "quantity": int(qty)})
+        return items
+    except httpx.HTTPError as exc:
+        logger.error(
+            "refund_line_items_fetch_error",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+        )
+        return None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "refund_line_items_fetch_unexpected",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return None
+
+
+async def _cash_refund_already_processed(
+    client: httpx.AsyncClient,
+    shop_domain: str,
+    order_id: str | int,
+) -> bool | None:
+    """
+    Detect whether a cash refund for this order has already paid out.
+
+    If it has, issuing a store-credit refund on top would double-pay the
+    customer, so the accept step must flag for manual review instead.
+
+    Returns True if a cash refund was captured, False otherwise, or None if
+    the order state could not be determined (treat as manual review).
+    """
+    url = (
+        f"https://{shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}"
+        f"/orders/{_numeric(order_id)}.json"
+        f"?fields=id,financial_status,refunds"
+    )
+    try:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            logger.warning(
+                "refund_state_fetch_non_200",
+                shop=shop_domain,
+                order_id=order_id,
+                status=resp.status_code,
+            )
+            return None
+        order = resp.json().get("order") or {}
+
+        financial_status = (order.get("financial_status") or "").upper()
+        if financial_status == "REFUNDED":
+            return True
+
+        for refund in order.get("refunds") or []:
+            for txn in refund.get("transactions") or []:
+                kind = (txn.get("kind") or "").upper()
+                status = (txn.get("status") or "").upper()
+                gateway = txn.get("gateway") or ""
+                if (
+                    kind == "REFUND"
+                    and status == "SUCCESS"
+                    and gateway != "shopify_store_credit"
+                ):
+                    return True
+        return False
+    except httpx.HTTPError as exc:
+        logger.error(
+            "refund_state_fetch_error",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+        )
+        return None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "refund_state_fetch_unexpected",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return None
+
+
+async def _create_store_credit_refund(
+    client: httpx.AsyncClient,
+    shop_domain: str,
+    order_id: str | int,
+    refund_line_items: list[dict],
+    amount_cents: int,
+    currency: str,
+    idempotency_key: str,
+) -> str | None:
+    """
+    Create a refund whose method is store credit (refundCreate + storeCreditRefund).
+
+    Shopify (2026-04+) requires the @idempotent directive with a literal key on
+    refundCreate; we use the offer's UUID so retries never double-spend.
+
+    Returns the created refund GID on success, or None on failure.
+    """
+    amount = f"{amount_cents / 100:.2f}"
+    safe_key = str(idempotency_key)  # our own UUID — safe to inline as a literal
+
+    mutation = f"""
+    mutation refundCreate($input: RefundInput!) {{
+        refundCreate(input: $input) @idempotent(key: "{safe_key}") {{
+            refund {{
+                id
+                totalRefundedSet {{
+                    presentmentMoney {{ amount }}
+                }}
+            }}
+            order {{ id }}
+            userErrors {{ field message }}
+        }}
+    }}
+    """
+    variables = {
+        "input": {
+            "orderId": _order_gid(order_id),
+            "refundLineItems": refund_line_items,
+            "transactions": [],
+            "refundMethods": [
+                {
+                    "storeCreditRefund": {
+                        "amount": {"amount": amount, "currencyCode": currency},
+                    }
+                }
+            ],
+        }
+    }
+
+    url = f"https://{shop_domain}/admin/api/{settings.SHOPIFY_API_VERSION}/graphql.json"
+    try:
+        response = await client.post(
+            url, json={"query": mutation, "variables": variables}
+        )
+        response.raise_for_status()
+        data = response.json()
+    except httpx.HTTPError as exc:
+        logger.error(
+            "store_credit_refund_http_error",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+        )
+        return None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "store_credit_refund_unexpected",
+            shop=shop_domain,
+            order_id=order_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return None
+
+    if "errors" in data:
+        logger.error(
+            "store_credit_refund_graphql_error",
+            shop=shop_domain,
+            order_id=order_id,
+            errors=data["errors"],
+        )
+        return None
+
+    result = data.get("data", {}).get("refundCreate", {})
+    user_errors = result.get("userErrors") or []
+    if user_errors:
+        logger.error(
+            "store_credit_refund_user_errors",
+            shop=shop_domain,
+            order_id=order_id,
+            errors=user_errors,
+        )
+        return None
+
+    refund = result.get("refund") or {}
+    refund_id = refund.get("id")
+    if not refund_id:
+        logger.error(
+            "store_credit_refund_missing_refund",
+            shop=shop_domain,
+            order_id=order_id,
+            result=result,
+        )
+        return None
+
+    logger.info(
+        "store_credit_refund_created",
+        shop=shop_domain,
+        order_id=order_id,
+        refund_id=refund_id,
+        amount_cents=amount_cents,
+    )
+    return refund_id
+
+
+async def refund_to_store_credit(
     db: AsyncSession,
     merchant_id: UUID,
     order_id: str,
     refund_id: str,
-) -> bool:
+    credit_amount_cents: int,
+    currency: str,
+    idempotency_key: UUID,
+) -> RefundActionOutcome:
     """
-    Cancel a refund in Shopify.
+    Issue a refund as a native Shopify store-credit refund (Refund Recovery).
 
-    Note: This is called AFTER credit is issued successfully.
-    Shopify will not process the refund if we cancel it.
+    Shopify cannot reverse an already-processed cash refund, so this replaces
+    the refund's method at creation time with store credit (refundCreate +
+    storeCreditRefund). It never double-pays: if a cash refund for the order was
+    already captured, the outcome is MANUAL_REVIEW and the offer must not be
+    marked accepted.
 
     Args:
         db: Database session
         merchant_id: Merchant ID
-        order_id: Shopify order ID
-        refund_id: Shopify refund ID
+        order_id: Shopify order ID (numeric, from webhook)
+        refund_id: Shopify refund ID (numeric, from webhook)
+        credit_amount_cents: Store credit amount to issue (refund + bonus)
+        currency: ISO 4217 currency code
+        idempotency_key: Offer UUID used as the refundCreate idempotency key
 
     Returns:
-        True if successful, False otherwise
+        RefundActionOutcome.CREDIT_REFUND_CREATED or RefundActionOutcome.MANUAL_REVIEW
     """
     client_data = await get_shopify_client(db, merchant_id)
     if not client_data:
-        return False
+        logger.error(
+            "refund_to_store_credit_no_client",
+            merchant_id=str(merchant_id),
+            order_id=order_id,
+        )
+        return RefundActionOutcome.MANUAL_REVIEW
 
     client, shop_domain, _ = client_data
 
     try:
-        # Note: Shopify doesn't have a direct "cancel refund" endpoint
-        # Once a refund is created, it's already processed
-        # What we actually need to do is NOT process the refund in the first place
-        # For MVP, we'll just log this - the merchant needs to manually cancel in Shopify admin
-
-        logger.warning(
-            "cancel_refund_not_implemented",
-            merchant_id=str(merchant_id),
-            order_id=order_id,
-            refund_id=refund_id,
-            note="Merchant must manually cancel refund in Shopify admin",
+        # Guard against double-pay: never issue store credit on top of a cash
+        # refund that has already paid out.
+        cash_processed = await _cash_refund_already_processed(
+            client, shop_domain, order_id
         )
+        if cash_processed is None:
+            logger.warning(
+                "refund_state_unknown_manual_review",
+                shop=shop_domain,
+                merchant_id=str(merchant_id),
+                order_id=order_id,
+            )
+            return RefundActionOutcome.MANUAL_REVIEW
+        if cash_processed:
+            logger.warning(
+                "cash_refund_already_processed_manual_review",
+                shop=shop_domain,
+                merchant_id=str(merchant_id),
+                order_id=order_id,
+            )
+            return RefundActionOutcome.MANUAL_REVIEW
 
-        # TODO: Investigate if we can use refund transactions API to reverse
-        # For now, return True as this is not critical for MVP
-        return True
+        refund_line_items = await _fetch_refund_line_items(
+            client, shop_domain, order_id, refund_id
+        )
+        if not refund_line_items:
+            logger.warning(
+                "no_refund_line_items_manual_review",
+                shop=shop_domain,
+                merchant_id=str(merchant_id),
+                order_id=order_id,
+                refund_id=refund_id,
+            )
+            return RefundActionOutcome.MANUAL_REVIEW
+
+        created_refund_id = await _create_store_credit_refund(
+            client,
+            shop_domain,
+            order_id,
+            refund_line_items,
+            credit_amount_cents,
+            currency,
+            idempotency_key=str(idempotency_key),
+        )
+        if not created_refund_id:
+            return RefundActionOutcome.MANUAL_REVIEW
+
+        return RefundActionOutcome.CREDIT_REFUND_CREATED
 
     finally:
         await client.aclose()

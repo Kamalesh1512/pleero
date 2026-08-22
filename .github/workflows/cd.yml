@@ -253,7 +253,7 @@ jobs:
              docker pull ghcr.io/${{ needs.version.outputs.repo_lowercase }}/pleero-backend:${{ needs.version.outputs.version }}
              docker pull ghcr.io/${{ needs.version.outputs.repo_lowercase }}/pleero-backend:latest
              docker compose -f docker-compose.production.yml run --rm --pull never backend alembic upgrade head
-             docker compose -f docker-compose.production.yml up -d --pull never --force-recreate backend caddy
+             docker compose -f docker-compose.production.yml up -d --pull never --force-recreate backend celery-worker celery-beat caddy
              docker compose -f docker-compose.production.yml ps"
 
       - name: Wait for backend health
@@ -271,13 +271,20 @@ jobs:
                echo \"Waiting... (\$i/30)\"; sleep 2
              done"
 
-      - name: Verify Caddy and clean up images
+      - name: Verify Caddy and Celery, clean up images
         run: |
           ssh ${{ secrets.DIGITALOCEAN_USER }}@${{ secrets.DIGITALOCEAN_HOST }} \
             "cd /home/${{ secrets.DIGITALOCEAN_USER }}/app
              docker compose -f docker-compose.production.yml ps caddy | grep -q 'Up' \
                || { docker compose -f docker-compose.production.yml logs caddy --tail=50; exit 1; }
              echo 'Caddy is running'
+             sleep 5
+             docker compose -f docker-compose.production.yml ps celery-worker | grep -q 'Up' \
+               || { docker compose -f docker-compose.production.yml logs celery-worker --tail=50; exit 1; }
+             echo 'Celery worker is running'
+             docker compose -f docker-compose.production.yml ps celery-beat | grep -q 'Up' \
+               || { docker compose -f docker-compose.production.yml logs celery-beat --tail=50; exit 1; }
+             echo 'Celery beat is running'
              docker image prune -af --filter 'until=48h'
              echo 'Deploy of ${{ needs.version.outputs.version }} complete'"
 

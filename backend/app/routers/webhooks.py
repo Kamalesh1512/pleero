@@ -3,16 +3,18 @@ Shopify webhook endpoints.
 Receives and processes webhook events from Shopify.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant, SubscriptionStatus
-from app.models.offer import Offer, OfferStatus
+from app.models.offer import Offer, OfferStatus, RefundStatus
 from app.models.offer_event import EventType, OfferEvent
 from app.schemas.webhook import (
     AppUninstalledPayload,
@@ -20,6 +22,7 @@ from app.schemas.webhook import (
     CustomersRedactPayload,
     RefundWebhookPayload,
     ShopRedactPayload,
+    StoreCreditDebitPayload,
 )
 from app.services.billing import (
     merchant_has_feature_access,
@@ -146,7 +149,8 @@ async def handle_refund_created(
     4. Check skip conditions
     5. Calculate bonus
     6. Create offer record
-    7. Send offer email (directly, no Celery for MVP)
+    7. Enqueue offer email to Celery (off the webhook path, keeps this under
+       Shopify's 5-second response window)
     8. Return 200 OK
 
     Hard rule #4: Must be async route, use httpx for external calls
@@ -195,8 +199,10 @@ async def handle_refund_created(
         webhook_data = parse_refund_webhook(payload.model_dump())
 
         # Shopify refund webhook does not include the full order/customer object.
-        # Fetch the order from the Admin API to get customer email and name.
-        if not webhook_data.customer_email:
+        # Fetch the order from the Admin API to get customer email, name and GID.
+        # Fetch if either the email or the customer GID is missing — the GID is
+        # stored on the offer for later lifecycle/intelligence work.
+        if not webhook_data.customer_email or not webhook_data.customer_shopify_gid:
             await _fetch_order_into_webhook_data(
                 webhook_data, merchant, payload.order_id, db
             )
@@ -272,7 +278,7 @@ async def handle_refund_created(
         event = OfferEvent(
             offer_id=offer.id,
             event_type=EventType.CREATED,
-            metadata={
+            offer_event_metadata={
                 "refund_id": webhook_data.refund_id,
                 "order_id": webhook_data.order_id,
                 "order_name": webhook_data.order_name,
@@ -292,10 +298,11 @@ async def handle_refund_created(
             bonus_applied_cents=bonus_applied_cents,
         )
 
-        # Send offer email
-        from app.services.email import send_offer_email
+        # Enqueue offer email (Celery worker sends it with retry, off the
+        # webhook request path).
+        from app.tasks.email_tasks import send_offer_email_task
 
-        await send_offer_email(db, offer.id)
+        send_offer_email_task.delay(str(offer.id))
 
         # Return 200 OK (Shopify requires this within 5 seconds)
         return {
@@ -657,6 +664,277 @@ async def _redact_shop(db: AsyncSession, payload: ShopRedactPayload) -> dict[str
         logger.error(
             "compliance_shop_redact_error",
             shop_domain=payload.shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}
+
+
+# ── Store Credit webhooks (analytics / intelligence stream) ──────────────────
+# Shopify sends these when Store Credit is credited or debited on a customer
+# account.  Pleero observes them to track redemption activity and compute
+# derived intelligence — Shopify is the authoritative source of truth for
+# balances; we store only the event stream.
+
+
+@router.post("/store_credit/debit")
+async def handle_store_credit_debit(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    Handle store_credit_accounts/debit webhook from Shopify.
+
+    Records the debit transaction so Pleero can track redemption rates,
+    outstanding credit, and time-to-redemption analytics.
+
+    Idempotent via the shopify_transaction_id unique constraint.
+    """
+    shop_domain = request.headers.get("x-shopify-shop-domain")
+    if not shop_domain:
+        logger.error("sc_webhook_missing_shop_domain")
+        return {"status": "error", "message": "Missing shop domain"}
+
+    logger.info(
+        "sc_webhook_received", topic="store_credit_accounts/debit", shop=shop_domain
+    )
+
+    try:
+        body_json = await request.json()
+        payload = StoreCreditDebitPayload(**body_json)
+
+        # Load merchant
+        result = await db.execute(
+            select(Merchant).where(Merchant.shop_domain == shop_domain)
+        )
+        merchant = result.scalar_one_or_none()
+        if not merchant:
+            return {"status": "skipped", "reason": "merchant_not_found"}
+
+        # Extract transaction details
+        txn = payload.customer_credit_balance_transaction
+        if not txn or not txn.id:
+            return {"status": "skipped", "reason": "missing_transaction_id"}
+
+        # Extract customer info
+        customer_email = None
+        customer_id = None
+        if txn.credit_balance and txn.credit_balance.customer:
+            customer_email = txn.credit_balance.customer.email
+            raw_id = txn.credit_balance.customer.id
+            customer_id = f"gid://shopify/Customer/{raw_id}" if raw_id else None
+
+        if not customer_email:
+            logger.warning(
+                "sc_webhook_no_customer_email",
+                shop=shop_domain,
+                txn_id=txn.id,
+            )
+            return {"status": "skipped", "reason": "no_customer_email"}
+
+        # Extract amount
+        amount_cents = 0
+        if txn.amount:
+            raw = txn.amount.amount
+            amount_val = float(raw) if isinstance(raw, str) else raw
+            amount_cents = int(amount_val * 100)
+
+        currency = txn.amount.currency_code if txn.amount else "USD"
+
+        # Persist credit transaction (idempotent via unique constraint)
+        from app.models.credit_transaction import (
+            CreditTransaction,
+            TransactionSource,
+            TransactionType,
+        )
+
+        ct = CreditTransaction(
+            merchant_id=merchant.id,
+            customer_email=customer_email,
+            customer_shopify_id=customer_id,
+            transaction_type=TransactionType.DEBIT,
+            amount_cents=amount_cents,
+            currency=currency,
+            source=TransactionSource.EXTERNAL,
+            shopify_transaction_id=txn.id,
+            occurred_at=datetime.now(UTC),
+        )
+        db.add(ct)
+
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.info(
+                "sc_webhook_duplicate_skipped",
+                shop=shop_domain,
+                txn_id=txn.id,
+            )
+            return {"status": "skipped", "reason": "duplicate_transaction"}
+
+        logger.info(
+            "sc_debit_recorded",
+            shop=shop_domain,
+            txn_id=txn.id,
+            amount_cents=amount_cents,
+        )
+        return {"status": "success"}
+
+    except Exception as e:
+        logger.error(
+            "sc_webhook_processing_error",
+            shop=shop_domain,
+            error=str(e),
+            exc_info=True,
+        )
+        return {"status": "error", "message": "Internal processing error"}
+
+
+# Matching window for attributing an observed CREDIT transaction back to a
+# Refund Recovery offer. Shopify's store_credit_accounts/credit webhook
+# fires within seconds of the refundCreate mutation that accept_offer()
+# calls, so this is a generous upper bound, not a tight race condition.
+_REFUND_RECOVERY_MATCH_WINDOW = timedelta(minutes=30)
+
+
+async def _match_refund_recovery_offer(
+    db: AsyncSession,
+    merchant_id,
+    customer_email: str,
+    amount_cents: int,
+) -> Offer | None:
+    """
+    Best-effort match of an observed Store Credit CREDIT transaction back to
+    the Refund Recovery offer that likely caused it.
+
+    Shopify's webhook payload carries no reference to the offer that
+    triggered issuance, so this is a heuristic (ATTRIBUTED, not OBSERVED):
+    same merchant + customer email + exact credit amount, accepted within
+    the match window, and not already linked to another transaction (each
+    offer can only be matched once). Returns None if nothing qualifies —
+    callers must fall back to TransactionSource.EXTERNAL.
+    """
+    from app.models.credit_transaction import CreditTransaction
+
+    cutoff = datetime.now(UTC) - _REFUND_RECOVERY_MATCH_WINDOW
+    result = await db.execute(
+        select(Offer)
+        .where(
+            Offer.merchant_id == merchant_id,
+            Offer.customer_email == customer_email,
+            Offer.credit_amount_cents == amount_cents,
+            Offer.refund_status == RefundStatus.CREDIT_REFUND_CREATED,
+            Offer.accepted_at.isnot(None),
+            Offer.accepted_at >= cutoff,
+            ~exists().where(CreditTransaction.offer_id == Offer.id),
+        )
+        .order_by(Offer.accepted_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+@router.post("/store_credit/credit")
+async def handle_store_credit_credit(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _body: bytes = Depends(verify_webhook_signature),
+) -> dict[str, str]:
+    """
+    Handle store_credit_accounts/credit webhook from Shopify.
+
+    Records external Store Credit issuance events so Pleero's analytics
+    can show issuance from outside sources, not just Pleero's own workflows.
+    """
+    shop_domain = request.headers.get("x-shopify-shop-domain")
+    if not shop_domain:
+        logger.error("sc_credit_webhook_missing_shop_domain")
+        return {"status": "error", "message": "Missing shop domain"}
+
+    logger.info(
+        "sc_webhook_received", topic="store_credit_accounts/credit", shop=shop_domain
+    )
+
+    try:
+        body_json = await request.json()
+        payload = StoreCreditDebitPayload(**body_json)
+
+        result = await db.execute(
+            select(Merchant).where(Merchant.shop_domain == shop_domain)
+        )
+        merchant = result.scalar_one_or_none()
+        if not merchant:
+            return {"status": "skipped", "reason": "merchant_not_found"}
+
+        txn = payload.customer_credit_balance_transaction
+        if not txn or not txn.id:
+            return {"status": "skipped", "reason": "missing_transaction_id"}
+
+        customer_email = None
+        customer_id = None
+        if txn.credit_balance and txn.credit_balance.customer:
+            customer_email = txn.credit_balance.customer.email
+            raw_id = txn.credit_balance.customer.id
+            customer_id = f"gid://shopify/Customer/{raw_id}" if raw_id else None
+
+        if not customer_email:
+            return {"status": "skipped", "reason": "no_customer_email"}
+
+        amount_cents = 0
+        if txn.amount:
+            raw = txn.amount.amount
+            amount_val = float(raw) if isinstance(raw, str) else raw
+            amount_cents = int(amount_val * 100)
+
+        currency = txn.amount.currency_code if txn.amount else "USD"
+
+        from app.models.credit_transaction import (
+            CreditTransaction,
+            TransactionSource,
+            TransactionType,
+        )
+
+        matched_offer = await _match_refund_recovery_offer(
+            db, merchant.id, customer_email, amount_cents
+        )
+
+        ct = CreditTransaction(
+            merchant_id=merchant.id,
+            customer_email=customer_email,
+            customer_shopify_id=customer_id,
+            transaction_type=TransactionType.CREDIT,
+            amount_cents=amount_cents,
+            currency=currency,
+            source=(
+                TransactionSource.REFUND_RECOVERY
+                if matched_offer
+                else TransactionSource.EXTERNAL
+            ),
+            offer_id=matched_offer.id if matched_offer else None,
+            shopify_transaction_id=txn.id,
+            occurred_at=datetime.now(UTC),
+        )
+        db.add(ct)
+
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            return {"status": "skipped", "reason": "duplicate_transaction"}
+
+        logger.info(
+            "sc_credit_recorded",
+            shop=shop_domain,
+            txn_id=txn.id,
+            amount_cents=amount_cents,
+        )
+        return {"status": "success"}
+
+    except Exception as e:
+        logger.error(
+            "sc_credit_webhook_processing_error",
+            shop=shop_domain,
             error=str(e),
             exc_info=True,
         )
