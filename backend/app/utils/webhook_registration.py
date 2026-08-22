@@ -30,6 +30,14 @@ async def register_webhooks(shop: str, access_token: str) -> bool:
             "topic": "APP_UNINSTALLED",
             "endpoint": f"{settings.API_BASE_URL}/webhooks/app/uninstalled",
         },
+        {
+            "topic": "STORE_CREDIT_ACCOUNTS_DEBIT",
+            "endpoint": f"{settings.API_BASE_URL}/webhooks/store_credit/debit",
+        },
+        {
+            "topic": "STORE_CREDIT_ACCOUNTS_CREDIT",
+            "endpoint": f"{settings.API_BASE_URL}/webhooks/store_credit/credit",
+        },
     ]
 
     logger.info(

@@ -31,6 +31,28 @@ class OfferStatus(PyEnum):
     EXPIRED = "EXPIRED"
 
 
+class RefundStatus(PyEnum):
+    """
+    State of the refund that backs a Refund Recovery offer.
+
+    Shopify cannot reverse an already-processed cash refund. Refund Recovery
+    therefore issues the refund as a native store-credit refund (refundCreate
+    + storeCreditRefund method) at accept time.
+
+    * PENDING                 — offer created, no refund action taken yet.
+    * CREDIT_REFUND_CREATED   — accept created a native store-credit refund.
+    * MANUAL_REVIEW           — credit refund could not be created safely
+                                (e.g. a cash refund was already captured, or
+                                Shopify refused); surfaced to the merchant for
+                                manual handling. The offer stays PENDING so no
+                                credit is silently issued on top of a refund.
+    """
+
+    PENDING = "PENDING"
+    CREDIT_REFUND_CREATED = "CREDIT_REFUND_CREATED"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
 class Offer(Base, TimestampMixin):
     """
     Offer model - one record per refund that gets an offer.
@@ -135,6 +157,13 @@ class Offer(Base, TimestampMixin):
     status: Mapped[OfferStatus] = mapped_column(
         Enum(OfferStatus),
         default=OfferStatus.PENDING,
+        nullable=False,
+    )
+
+    # State of the backing refund for Refund Recovery (native store-credit refund).
+    refund_status: Mapped[RefundStatus] = mapped_column(
+        Enum(RefundStatus),
+        default=RefundStatus.PENDING,
         nullable=False,
     )
 

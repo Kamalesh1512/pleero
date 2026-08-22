@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.models.merchant import Merchant
-from app.models.offer import Offer, OfferStatus
+from app.models.offer import Offer, OfferStatus, RefundStatus
 from app.schemas.merchant import MerchantResponse, MerchantUpdate
 from app.services.billing import sync_merchant_subscription_from_shopify
 from app.utils.session_auth import get_current_shop
@@ -32,6 +32,7 @@ class OfferListItem(BaseModel):
     refund_amount_cents: int
     credit_amount_cents: int
     status: OfferStatus
+    refund_status: RefundStatus
     revenue_retained_cents: int | None
     created_at: datetime
 
@@ -55,6 +56,7 @@ class DashboardMetrics(BaseModel):
     offers_declined: int
     acceptance_rate: float
     revenue_retained_cents: int
+    offers_needing_review: int
 
 
 @router.get("/dashboard/metrics")
@@ -127,6 +129,16 @@ async def get_dashboard_metrics(
     offers_declined = row.declined or 0
     revenue_retained_cents = row.revenue_retained or 0
 
+    # Offers needing manual review — not scoped to the current month, since
+    # these need merchant action regardless of when the offer was created.
+    review_result = await db.execute(
+        select(func.count(Offer.id)).where(
+            Offer.merchant_id == merchant.id,
+            Offer.refund_status == RefundStatus.MANUAL_REVIEW,
+        )
+    )
+    offers_needing_review = review_result.scalar_one() or 0
+
     # Calculate acceptance rate
     if offers_sent > 0:
         acceptance_rate = offers_accepted / offers_sent * 100
@@ -146,6 +158,7 @@ async def get_dashboard_metrics(
         offers_declined=offers_declined,
         acceptance_rate=round(acceptance_rate, 1),
         revenue_retained_cents=revenue_retained_cents,
+        offers_needing_review=offers_needing_review,
     )
 
 
@@ -289,6 +302,7 @@ async def get_merchant_offers(
     db: AsyncSession = Depends(get_db),
     limit: int = 100,
     offset: int = 0,
+    needs_review: bool = False,
 ) -> OfferListResponse:
     """
     Get list of all offers for the current merchant.
@@ -298,6 +312,7 @@ async def get_merchant_offers(
     Args:
         limit: Maximum number of offers to return (default 100)
         offset: Number of offers to skip (default 0)
+        needs_review: If true, only return offers flagged MANUAL_REVIEW
 
     Returns:
         List of offers with customer and order details
@@ -313,20 +328,28 @@ async def get_merchant_offers(
             detail="Merchant not found",
         )
 
-    # Get total count
-    count_result = await db.execute(
-        select(func.count(Offer.id)).where(Offer.merchant_id == merchant.id)
-    )
-    total = count_result.scalar_one()
-
-    # Get offers, ordered by created_at desc (newest first)
-    result = await db.execute(
+    count_query = select(func.count(Offer.id)).where(Offer.merchant_id == merchant.id)
+    offers_query = (
         select(Offer)
         .where(Offer.merchant_id == merchant.id)
         .order_by(Offer.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
+    if needs_review:
+        count_query = count_query.where(
+            Offer.refund_status == RefundStatus.MANUAL_REVIEW
+        )
+        offers_query = offers_query.where(
+            Offer.refund_status == RefundStatus.MANUAL_REVIEW
+        )
+
+    # Get total count
+    count_result = await db.execute(count_query)
+    total = count_result.scalar_one()
+
+    # Get offers, ordered by created_at desc (newest first)
+    result = await db.execute(offers_query)
     offers = result.scalars().all()
 
     # Convert to response format
@@ -345,6 +368,7 @@ async def get_merchant_offers(
                 refund_amount_cents=offer.refund_amount_cents,
                 credit_amount_cents=offer.credit_amount_cents,
                 status=offer.status,
+                refund_status=offer.refund_status,
                 revenue_retained_cents=revenue_retained_cents,
                 created_at=offer.created_at,
             )

@@ -3,7 +3,7 @@ Offer endpoints.
 Public routes for customers to view, accept, or decline store credit offers.
 """
 
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,21 +12,51 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
-from app.models.offer import Offer, OfferStatus
+from app.models.offer import Offer, OfferStatus, RefundStatus
 from app.models.merchant import Merchant
 from app.models.offer_event import OfferEvent, EventType
 from app.services.billing import (
     merchant_has_feature_access,
     sync_merchant_subscription_from_shopify,
 )
-from app.services.shopify import issue_store_credit, cancel_refund
+from app.services.shopify import RefundActionOutcome, refund_to_store_credit
 from app.services.email import format_currency
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/offers", tags=["offers"])
 limiter = Limiter(key_func=get_remote_address)
+
+
+async def expire_offer_if_due(db: AsyncSession, offer: Offer) -> bool:
+    """
+    Lazily expire a PENDING offer older than OFFER_EXPIRY_DAYS.
+
+    Idempotent: only acts while the offer is PENDING. Emits an EXPIRED event so
+    expiry is observable in the lifecycle. Returns True if the offer expired.
+    """
+    if offer.status != OfferStatus.PENDING:
+        return False
+
+    if offer.created_at is not None:
+        age = datetime.now(UTC) - offer.created_at
+        if age < timedelta(days=settings.OFFER_EXPIRY_DAYS):
+            return False
+
+    offer.status = OfferStatus.EXPIRED
+    offer.expired_at = datetime.now(UTC)
+    db.add(
+        OfferEvent(
+            offer_id=offer.id,
+            event_type=EventType.EXPIRED,
+            offer_event_metadata={"reason": "expiry_period_elapsed"},
+        )
+    )
+    await db.commit()
+    logger.info("offer_expired_lazily", offer_id=str(offer.id))
+    return True
 
 
 class OfferResponse(BaseModel):
@@ -85,6 +115,9 @@ async def get_offer(
             detail="Offer not found",
         )
 
+    # Lazily expire the offer if its validity window has elapsed.
+    await expire_offer_if_due(db, offer)
+
     # Check offer status
     if offer.status != OfferStatus.PENDING:
         logger.info(
@@ -98,8 +131,10 @@ async def get_offer(
         )
 
     # Load merchant for branding
-    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
-    merchant: Merchant | None = result.scalar_one_or_none()
+    merchant_result = await db.execute(
+        select(Merchant).where(Merchant.id == offer.merchant_id)
+    )
+    merchant: Merchant | None = merchant_result.scalar_one_or_none()
 
     if not merchant:
         logger.error("merchant_not_found", offer_id=str(offer.id))
@@ -148,10 +183,12 @@ async def accept_offer(
 
     Flow:
     1. Load offer (must be PENDING)
-    2. Issue store credit via Shopify API
-    3. Cancel refund (if possible)
-    4. Update offer status to ACCEPTED
-    5. Create audit events
+    2. Issue a native store-credit refund via Shopify API (no separate cash
+       refund is created, so nothing needs to be cancelled/reversed). If a
+       cash refund already paid out, flag the offer for manual review instead
+       of issuing credit on top of it.
+    3. Update offer status to ACCEPTED
+    4. Create audit events
 
     Idempotent: If already accepted, return success.
 
@@ -174,6 +211,9 @@ async def accept_offer(
             status_code=404,
             detail="Offer not found",
         )
+
+    # Lazily expire the offer if its validity window has elapsed.
+    await expire_offer_if_due(db, offer)
 
     # Idempotent: If already accepted, return success
     if offer.status == OfferStatus.ACCEPTED:
@@ -200,8 +240,10 @@ async def accept_offer(
         )
 
     # Load merchant
-    result = await db.execute(select(Merchant).where(Merchant.id == offer.merchant_id))
-    merchant = result.scalar_one_or_none()
+    merchant_result = await db.execute(
+        select(Merchant).where(Merchant.id == offer.merchant_id)
+    )
+    merchant = merchant_result.scalar_one_or_none()
 
     if not merchant:
         logger.error("merchant_not_found", offer_id=str(offer.id))
@@ -224,40 +266,55 @@ async def accept_offer(
         )
 
     try:
-        # Step 1: Issue store credit
-        credit_issued = await issue_store_credit(
-            db=db,
-            merchant_id=merchant.id,
-            customer_email=offer.customer_email,
-            amount_cents=offer.credit_amount_cents,
-            currency=merchant.currency,
-            note=f"Store credit from return (Order {offer.shopify_order_id})",
-            customer_shopify_id=offer.customer_shopify_id,
-        )
-
-        if not credit_issued:
-            logger.error(
-                "offer_accept_credit_failed",
-                offer_id=str(offer.id),
-            )
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to issue store credit",
-            )
-
-        # Step 2: Cancel refund (best effort)
-        await cancel_refund(
+        # Step 1: Issue a native store-credit refund (refundCreate + storeCreditRefund).
+        # This issues the credit directly and no separate cash refund is made, so no
+        # reversal is needed. It is idempotent via the offer's UUID as the
+        # refundCreate idempotency key.
+        outcome = await refund_to_store_credit(
             db=db,
             merchant_id=merchant.id,
             order_id=offer.shopify_order_id,
             refund_id=offer.shopify_refund_id,
+            credit_amount_cents=offer.credit_amount_cents,
+            currency=offer.currency_code,
+            idempotency_key=offer.id,
         )
 
-        # Step 3: Update offer status
+        if outcome != RefundActionOutcome.CREDIT_REFUND_CREATED:
+            # Consistent with the no-silent-credit rule: the offer stays PENDING
+            # and is flagged for merchant/manual review rather than pretending the
+            # credit was issued while a cash refund may still pay out.
+            offer.refund_status = RefundStatus.MANUAL_REVIEW
+            await db.commit()
+            logger.error(
+                "offer_accept_store_credit_refund_manual_review",
+                offer_id=str(offer.id),
+                merchant_id=str(merchant.id),
+                order_id=offer.shopify_order_id,
+                refund_id=offer.shopify_refund_id,
+            )
+
+            # Alert the merchant off the request path so they can resolve this
+            # in Shopify admin — Pleero never fakes success on this path.
+            from app.tasks.email_tasks import send_manual_review_alert_email_task
+
+            send_manual_review_alert_email_task.delay(str(offer.id))
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "We couldn't automatically issue your store credit right now. "
+                    "The store has been notified and will resolve this shortly — "
+                    "no further action is needed from you."
+                ),
+            )
+
+        # Step 2: Mark the offer accepted and record the refund lifecycle.
         offer.status = OfferStatus.ACCEPTED
+        offer.refund_status = RefundStatus.CREDIT_REFUND_CREATED
         offer.accepted_at = datetime.now(UTC)
 
-        # Step 4: Create audit events
+        # Step 3: Create audit events
         event_accepted = OfferEvent(
             offer_id=offer.id,
             event_type=EventType.ACCEPTED,
@@ -267,8 +324,11 @@ async def accept_offer(
         event_credit_issued = OfferEvent(
             offer_id=offer.id,
             event_type=EventType.CREDIT_ISSUED,
-            metadata={
+            offer_event_metadata={
                 "amount_cents": offer.credit_amount_cents,
+                "refund_id": offer.shopify_refund_id,
+                "order_id": offer.shopify_order_id,
+                "refund_status": RefundStatus.CREDIT_REFUND_CREATED.value,
             },
         )
         db.add(event_credit_issued)
@@ -336,6 +396,9 @@ async def decline_offer(
             status_code=404,
             detail="Offer not found",
         )
+
+    # Lazily expire the offer if its validity window has elapsed.
+    await expire_offer_if_due(db, offer)
 
     # Check if offer is still pending
     if offer.status != OfferStatus.PENDING:

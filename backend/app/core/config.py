@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # Shopify returns a user error. Never set True in real production.
     BILLING_TEST_MODE: bool = False
 
+    # Offer validity window. After this many days a PENDING offer is expired
+    # (enforced lazily on access and by the daily sweep job).
+    OFFER_EXPIRY_DAYS: int = 14
+
+    # Sentry (optional — if unset, error monitoring is disabled).
+    SENTRY_DSN: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
